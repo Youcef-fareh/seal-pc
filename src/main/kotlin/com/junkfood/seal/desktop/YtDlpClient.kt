@@ -65,6 +65,8 @@ class YtDlpClient(private val executable: String) {
             mutableListOf(
                 "--newline",
                 "--no-playlist",
+                "--ignore-config",
+                "--no-ignore-errors",
                 "--socket-timeout",
                 "30",
                 "--continue",
@@ -143,10 +145,9 @@ class YtDlpClient(private val executable: String) {
 
 internal fun videoFormatSelector(maxHeight: Int?): String {
     val heightFilter = maxHeight?.let { "[height<=$it]" }.orEmpty()
-    return
-        "bestvideo[ext=mp4]$heightFilter+bestaudio[ext=m4a]/" +
-            "best[ext=mp4]$heightFilter/" +
-            "bestvideo$heightFilter+bestaudio/best$heightFilter"
+    return "(bestvideo[ext=mp4]$heightFilter+bestaudio[ext=m4a])/" +
+        "(bestvideo$heightFilter+bestaudio)/" +
+        "best[ext=mp4]$heightFilter/best$heightFilter"
 }
 
 class DownloadControl {

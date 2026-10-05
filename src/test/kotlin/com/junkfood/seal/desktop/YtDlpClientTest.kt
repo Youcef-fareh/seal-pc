@@ -40,11 +40,11 @@ class YtDlpClientTest {
     @Test
     fun prefersMp4VideoWithM4aAudioAndKeepsHeightLimit() {
         assertEquals(
-            "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/bestvideo[height<=720]+bestaudio/best[height<=720]",
+            "(bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a])/(bestvideo[height<=720]+bestaudio)/best[ext=mp4][height<=720]/best[height<=720]",
             videoFormatSelector(720),
         )
         assertEquals(
-            "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/bestvideo+bestaudio/best",
+            "(bestvideo[ext=mp4]+bestaudio[ext=m4a])/(bestvideo+bestaudio)/best[ext=mp4]/best",
             videoFormatSelector(null),
         )
     }
