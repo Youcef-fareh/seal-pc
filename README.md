@@ -46,10 +46,11 @@ Updates use the complete installer rather than incremental patches. This keeps u
 ## Downloading
 
 1. Paste a YouTube video link and select **Load formats**.
-2. Choose a resolution for video, or select audio-only and choose an audio format.
-3. Pick a download folder and select **Download**.
+2. Choose video resolution or audio format/quality and a download folder, then select **Add to download queue**.
+3. Repeat for each video. Choose **Start downloads** when you are ready; queued videos download one at a time.
+4. Pause and resume individual active downloads, or remove a video from the queue.
 
-Video downloads use yt-dlp's best available video and audio streams at or below the selected resolution, then merge them when necessary. Audio downloads are converted by yt-dlp/FFmpeg to the selected format and quality. The app supports individual YouTube videos; playlist downloads are not included in this desktop version.
+Video and audio streams are merged into one MKV file using FFmpeg. Audio-only downloads are converted by yt-dlp/FFmpeg to the selected format and quality. Paused downloads can resume from their partial files. The app supports individual YouTube videos; playlist downloads are not included in this desktop version. Choose English or Arabic from the language menu; the Arabic interface uses right-to-left layout.
 
 ## Standalone repository
 

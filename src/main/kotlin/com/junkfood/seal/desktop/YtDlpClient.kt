@@ -4,6 +4,8 @@ import java.io.File
 import java.net.URI
 import java.util.ArrayDeque
 import java.util.Collections
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.concurrent.thread
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
@@ -53,6 +55,7 @@ class YtDlpClient(private val executable: String) {
         maxHeight: Int?,
         audioFormat: String?,
         audioQuality: String,
+        control: DownloadControl = DownloadControl(),
         onProgress: (String) -> Unit,
     ) {
         requireYouTubeUrl(url)
@@ -64,6 +67,7 @@ class YtDlpClient(private val executable: String) {
                 "--no-playlist",
                 "--socket-timeout",
                 "30",
+                "--continue",
                 "--paths",
                 outputDirectory.absolutePath,
                 "-o",
@@ -83,16 +87,18 @@ class YtDlpClient(private val executable: String) {
                     "bestvideo[height<=$maxHeight]+bestaudio/best[height<=$maxHeight]"
                 }
             args += listOf("--format", format)
+            args += listOf("--merge-output-format", "mkv")
         }
 
         args += url
-        run(args, onProgress, captureOutput = false)
+        run(args, onProgress, captureOutput = false, control = control)
     }
 
     private fun run(
         arguments: List<String>,
         onLine: (String) -> Unit = {},
         captureOutput: Boolean = true,
+        control: DownloadControl? = null,
     ): String {
         val process =
             try {
@@ -108,6 +114,7 @@ class YtDlpClient(private val executable: String) {
 
         val lines = Collections.synchronizedList(mutableListOf<String>())
         val recentLines = ArrayDeque<String>()
+        control?.attach(process)
         val reader =
             thread(name = "yt-dlp-output-reader", isDaemon = true) {
                 process.inputStream.bufferedReader().useLines { outputLines ->
@@ -122,8 +129,15 @@ class YtDlpClient(private val executable: String) {
                 }
             }
 
-        process.waitFor()
+        try {
+            process.waitFor()
+        } finally {
+            control?.detach(process)
+        }
         reader.join()
+
+        if (control?.wasCancelled == true) throw DownloadCancelledException()
+        if (control?.wasPaused == true) throw DownloadPausedException()
 
         if (process.exitValue() != 0) {
             val details = synchronized(lines) { recentLines.joinToString("\n") }
@@ -133,6 +147,43 @@ class YtDlpClient(private val executable: String) {
         return synchronized(lines) { lines.joinToString("\n") }
     }
 }
+
+class DownloadControl {
+    private val process = AtomicReference<Process?>()
+    private val paused = AtomicBoolean(false)
+    private val cancelled = AtomicBoolean(false)
+
+    val wasPaused: Boolean
+        get() = paused.get()
+
+    val wasCancelled: Boolean
+        get() = cancelled.get()
+
+    fun pause() {
+        if (cancelled.get()) return
+        paused.set(true)
+        process.get()?.destroy()
+    }
+
+    fun cancel() {
+        cancelled.set(true)
+        paused.set(false)
+        process.get()?.destroy()
+    }
+
+    internal fun attach(runningProcess: Process) {
+        process.set(runningProcess)
+        if (paused.get() || cancelled.get()) runningProcess.destroy()
+    }
+
+    internal fun detach(runningProcess: Process) {
+        process.compareAndSet(runningProcess, null)
+    }
+}
+
+class DownloadPausedException : Exception()
+
+class DownloadCancelledException : Exception()
 
 internal fun requireYouTubeUrl(url: String) {
     val uri =
