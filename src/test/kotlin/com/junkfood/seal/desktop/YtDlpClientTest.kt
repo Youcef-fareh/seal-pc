@@ -27,4 +27,13 @@ class YtDlpClientTest {
         assertEquals(false, VideoFormat(vcodec = "none").hasVideo())
         assertEquals(false, VideoFormat(vcodec = null).hasVideo())
     }
+
+    @Test
+    fun comparesReleaseVersionsNumerically() {
+        assertEquals(true, isNewerVersion("1.0.9", "1.0.10"))
+        assertEquals(true, isNewerVersion("1.0.0", "1.1"))
+        assertEquals(false, isNewerVersion("1.0.0", "1.0"))
+        assertEquals(false, isNewerVersion("2.0", "1.99.99"))
+        assertEquals(false, isNewerVersion("invalid", "1.0.1"))
+    }
 }

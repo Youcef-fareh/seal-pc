@@ -6,7 +6,8 @@ plugins {
 }
 
 group = "com.junkfood.seal.desktop"
-version = "1.0.0"
+val desktopVersion = providers.gradleProperty("appVersion").orElse("1.0.0").get().removePrefix("v")
+version = desktopVersion
 
 kotlin {
     jvmToolchain(21)
@@ -32,7 +33,7 @@ compose.desktop {
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Msi,
             )
             packageName = "Seal Desktop"
-            packageVersion = "1.0.0"
+            packageVersion = desktopVersion
             description = "A Windows desktop video and audio downloader"
             vendor = "Seal Desktop"
         }
@@ -41,4 +42,10 @@ compose.desktop {
 
 tasks.test {
     useJUnitPlatform()
+}
+
+tasks.processResources {
+    filesMatching("version.properties") {
+        expand(mapOf("version" to desktopVersion))
+    }
 }

@@ -19,12 +19,14 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -44,8 +46,10 @@ import javax.swing.JFileChooser
 import javax.swing.UIManager
 import javax.swing.filechooser.FileNameExtensionFilter
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.prefs.Preferences
 
 private val accent = Color(0xFFE53935)
 private val audioFormats = listOf("mp3", "m4a", "opus", "wav")
@@ -56,13 +60,14 @@ fun main() = application {
         onCloseRequest = ::exitApplication,
         title = "Seal Desktop",
     ) {
-        SealDesktopApp()
+        SealDesktopApp(onExit = ::exitApplication)
     }
 }
 
 @Composable
-private fun SealDesktopApp() {
+private fun SealDesktopApp(onExit: () -> Unit) {
     val scope = rememberCoroutineScope()
+    val updatePreferences = remember { Preferences.userNodeForPackage(AppUpdater::class.java) }
     var url by remember { mutableStateOf("") }
     var executable by remember { mutableStateOf("yt-dlp") }
     var downloadDirectory by remember {
@@ -77,6 +82,48 @@ private fun SealDesktopApp() {
     var error by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var progress by remember { mutableStateOf<Float?>(null) }
+    var update by remember { mutableStateOf<DesktopUpdate?>(null) }
+    var showUpdateDialog by remember { mutableStateOf(false) }
+    var checkingUpdates by remember { mutableStateOf(false) }
+    var installingUpdate by remember { mutableStateOf(false) }
+    var updateProgress by remember { mutableStateOf<Float?>(null) }
+    var updateStatus by remember { mutableStateOf("Checking for updates…") }
+    var updateError by remember { mutableStateOf(false) }
+
+    fun checkForUpdates(manual: Boolean) {
+        if (checkingUpdates) return
+        checkingUpdates = true
+        updateError = false
+        updateStatus = "Checking for updates…"
+        scope.launch {
+            try {
+                val availableUpdate =
+                    withContext(Dispatchers.IO) { AppUpdater.checkForUpdate() }
+                update = availableUpdate
+                if (availableUpdate == null) {
+                    updateStatus = "You’re up to date (v${AppUpdater.currentVersion})."
+                } else {
+                    updateStatus = "Version ${availableUpdate.version} is available."
+                    val snoozedUntil = updatePreferences.getLong("updateReminderUntil", 0L)
+                    if (manual || System.currentTimeMillis() >= snoozedUntil) {
+                        showUpdateDialog = true
+                    } else {
+                        scope.launch {
+                            delay(snoozedUntil - System.currentTimeMillis())
+                            showUpdateDialog = true
+                        }
+                    }
+                }
+            } catch (exception: Exception) {
+                updateError = true
+                updateStatus = exception.message ?: "Could not check for updates."
+            } finally {
+                checkingUpdates = false
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) { checkForUpdates(manual = false) }
 
     MaterialTheme(
         colorScheme =
@@ -349,12 +396,109 @@ private fun SealDesktopApp() {
                     }
                 }
 
+                Card {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text("App updates", style = MaterialTheme.typography.titleMedium)
+                            TextButton(
+                                enabled = !checkingUpdates && !installingUpdate,
+                                onClick = { checkForUpdates(manual = true) },
+                            ) {
+                                Text(if (checkingUpdates) "Checking…" else "Check for updates")
+                            }
+                        }
+                        Text(
+                            updateStatus,
+                            color =
+                                if (updateError) MaterialTheme.colorScheme.error
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        updateProgress?.let {
+                            LinearProgressIndicator(
+                                progress = { it.coerceIn(0f, 1f) },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
+                }
+
                 Text(
                     "Only download content you have permission to save. You are responsible for complying with applicable laws and YouTube’s terms.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
+        }
+
+        update?.takeIf { showUpdateDialog }?.let { availableUpdate ->
+            AlertDialog(
+                onDismissRequest = {
+                    updatePreferences.putLong(
+                        "updateReminderUntil",
+                        System.currentTimeMillis() + UPDATE_REMINDER_MILLIS,
+                    )
+                    showUpdateDialog = false
+                },
+                title = { Text("Seal Desktop ${availableUpdate.version} is available") },
+                text = {
+                    Text(
+                        "Download and open the Windows installer now, or be reminded about this update later. The installer is downloaded only after you choose to install it.",
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        enabled = !installingUpdate,
+                        onClick = {
+                            installingUpdate = true
+                            updateProgress = 0f
+                            updateError = false
+                            updateStatus = "Downloading the update installer…"
+                            scope.launch {
+                                try {
+                                    val installer =
+                                        withContext(Dispatchers.IO) {
+                                            AppUpdater.downloadInstaller(availableUpdate) {
+                                                updateProgress = it
+                                            }
+                                        }
+                                    updateStatus = "Opening the Windows installer…"
+                                    ProcessBuilder("msiexec.exe", "/i", installer.absolutePath).start()
+                                    onExit()
+                                } catch (exception: Exception) {
+                                    installingUpdate = false
+                                    updateError = true
+                                    updateStatus =
+                                        exception.message ?: "Could not download or open the update installer."
+                                    showUpdateDialog = false
+                                }
+                            }
+                        },
+                    ) {
+                        Text(if (installingUpdate) "Downloading…" else "Download & install")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        enabled = !installingUpdate,
+                        onClick = {
+                            updatePreferences.putLong(
+                                "updateReminderUntil",
+                                System.currentTimeMillis() + UPDATE_REMINDER_MILLIS,
+                            )
+                            showUpdateDialog = false
+                        },
+                    ) {
+                        Text("Remind me later")
+                    }
+                },
+            )
         }
     }
 }
@@ -403,6 +547,8 @@ private fun chooseExecutable(currentPath: String): File? {
         dialogTitle = "Select yt-dlp executable"
         fileFilter = FileNameExtensionFilter("yt-dlp executable (*.exe)", "exe")
     }
+
+    private const val UPDATE_REMINDER_MILLIS = 24L * 60 * 60 * 1000
     return if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) {
         chooser.selectedFile
     } else {

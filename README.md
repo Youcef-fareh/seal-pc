@@ -39,6 +39,10 @@ The `.exe` and `.msi` installers are created under `build/compose/binaries/main/
 
 The GitHub Actions workflow tests the project and builds both Windows installers. Open the repository's **Actions** tab and download the `seal-desktop-windows-installers` artifact from a successful run. To publish both installers on a GitHub Release, push a version tag such as `v1.0.0`; the workflow attaches the installers to that release automatically.
 
+Seal Desktop checks GitHub Releases for updates at startup and offers **Download & install** or **Remind me later**. It downloads the full Windows MSI only after you choose to install. Windows starts the MSI installer so you can review and confirm the installation. Reminders are snoozed for 24 hours.
+
+Updates use the complete installer rather than incremental patches. This keeps updates reliable and avoids downloading anything until you approve; delta updates would require a separate patching and recovery system.
+
 ## Downloading
 
 1. Paste a YouTube video link and select **Load formats**.
