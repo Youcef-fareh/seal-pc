@@ -80,14 +80,7 @@ class YtDlpClient(private val executable: String) {
                 args += listOf("--audio-quality", audioQuality)
             }
         } else {
-            val format =
-                if (maxHeight == null) {
-                    "bv*+ba/b"
-                } else {
-                    "bestvideo[height<=$maxHeight]+bestaudio/best[height<=$maxHeight]"
-                }
-            args += listOf("--format", format)
-            args += listOf("--merge-output-format", "mkv")
+            args += listOf("--format", videoFormatSelector(maxHeight))
         }
 
         args += url
@@ -146,6 +139,14 @@ class YtDlpClient(private val executable: String) {
 
         return synchronized(lines) { lines.joinToString("\n") }
     }
+}
+
+internal fun videoFormatSelector(maxHeight: Int?): String {
+    val heightFilter = maxHeight?.let { "[height<=$it]" }.orEmpty()
+    return
+        "bestvideo[ext=mp4]$heightFilter+bestaudio[ext=m4a]/" +
+            "best[ext=mp4]$heightFilter/" +
+            "bestvideo$heightFilter+bestaudio/best$heightFilter"
 }
 
 class DownloadControl {

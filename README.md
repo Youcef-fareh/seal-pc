@@ -50,7 +50,7 @@ Updates use the complete installer rather than incremental patches. This keeps u
 3. Repeat for each video. Choose **Start downloads** when you are ready; queued videos download one at a time.
 4. Pause and resume individual active downloads, or remove a video from the queue.
 
-Video and audio streams are merged into one MKV file using FFmpeg. Audio-only downloads are converted by yt-dlp/FFmpeg to the selected format and quality. Paused downloads can resume from their partial files. The app supports individual YouTube videos; playlist downloads are not included in this desktop version. Choose English or Arabic from the language menu; the Arabic interface uses right-to-left layout.
+Video and audio streams are merged into a single playable file using FFmpeg. The app prefers MP4 video with M4A/AAC audio for Windows-player compatibility and falls back to other compatible streams when needed. Audio-only downloads are converted by yt-dlp/FFmpeg to the selected format and quality. Paused downloads can resume from their partial files. The app supports individual YouTube videos; playlist downloads are not included in this desktop version. Choose English or Arabic from the language menu; the Arabic interface uses right-to-left layout.
 
 ## Standalone repository
 

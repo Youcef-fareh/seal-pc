@@ -36,4 +36,16 @@ class YtDlpClientTest {
         assertEquals(false, isNewerVersion("2.0", "1.99.99"))
         assertEquals(false, isNewerVersion("invalid", "1.0.1"))
     }
+
+    @Test
+    fun prefersMp4VideoWithM4aAudioAndKeepsHeightLimit() {
+        assertEquals(
+            "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/bestvideo[height<=720]+bestaudio/best[height<=720]",
+            videoFormatSelector(720),
+        )
+        assertEquals(
+            "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/bestvideo+bestaudio/best",
+            videoFormatSelector(null),
+        )
+    }
 }
