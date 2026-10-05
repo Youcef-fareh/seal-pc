@@ -1,5 +1,7 @@
 package com.junkfood.seal.desktop
 
+import java.io.File
+import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -47,5 +49,20 @@ class YtDlpClientTest {
             "(bestvideo[ext=mp4]+bestaudio[ext=m4a])/(bestvideo+bestaudio)/best[ext=mp4]/best",
             videoFormatSelector(null),
         )
+    }
+
+    @Test
+    fun usesBundledFfmpegWhenAvailable() {
+        val resources = Files.createTempDirectory("seal-resources").toFile()
+        val ffmpegDirectory = File(resources, "ffmpeg").apply { mkdirs() }
+        File(ffmpegDirectory, "ffmpeg.exe").createNewFile()
+
+        assertEquals(
+            listOf("--ffmpeg-location", ffmpegDirectory.absolutePath),
+            bundledFfmpegLocationArguments(resources.absolutePath),
+        )
+        assertEquals(emptyList(), bundledFfmpegLocationArguments(null))
+
+        resources.deleteRecursively()
     }
 }
