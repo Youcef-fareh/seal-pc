@@ -54,6 +54,7 @@ import java.util.prefs.Preferences
 private val accent = Color(0xFFE53935)
 private val audioFormats = listOf("mp3", "m4a", "opus", "wav")
 private val audioQualities = listOf("Best", "320 kbps", "256 kbps", "192 kbps", "128 kbps")
+private const val UPDATE_REMINDER_MILLIS = 24L * 60 * 60 * 1000
 
 fun main() = application {
     Window(
@@ -548,7 +549,6 @@ private fun chooseExecutable(currentPath: String): File? {
         fileFilter = FileNameExtensionFilter("yt-dlp executable (*.exe)", "exe")
     }
 
-    private const val UPDATE_REMINDER_MILLIS = 24L * 60 * 60 * 1000
     return if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) {
         chooser.selectedFile
     } else {
