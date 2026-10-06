@@ -80,4 +80,18 @@ class YtDlpClientTest {
 
         resources.deleteRecursively()
     }
+
+    @Test
+    fun usesBundledDenoForYouTubeJavaScriptChallenges() {
+        val resources = Files.createTempDirectory("seal-resources").toFile()
+        File(resources, "deno.exe").createNewFile()
+
+        assertEquals(
+            listOf("--js-runtimes", "deno:${File(resources, "deno.exe").absolutePath}"),
+            bundledDenoArguments(resources.absolutePath),
+        )
+        assertEquals(emptyList(), bundledDenoArguments(null))
+
+        resources.deleteRecursively()
+    }
 }

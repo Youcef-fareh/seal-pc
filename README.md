@@ -11,11 +11,11 @@ A Windows desktop companion to Seal for downloading videos and audio from YouTub
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp#installation) available on `PATH`, or the path to `yt-dlp.exe` (not required for the Windows installer)
 - FFmpeg available on `PATH` for running from source; the Windows installers bundle FFmpeg for format merging and audio conversion
 
-The Windows installers bundle yt-dlp and an LGPL shared build of FFmpeg, so users do not need to install either tool or add them to `PATH`. Running from source still requires yt-dlp and FFmpeg installed separately. Both bundled tools are downloaded and checksum-verified during packaging. YouTube may change its service at any time; if downloads stop working, update yt-dlp.
+The Windows installers bundle yt-dlp, Deno (the JavaScript runtime yt-dlp uses for YouTube extraction), and an LGPL shared build of FFmpeg, so users do not need to install these tools or add them to `PATH`. Running from source still requires yt-dlp, Deno, and FFmpeg installed separately. Bundled tools are downloaded and checksum-verified during packaging. YouTube may change its service at any time; if downloads stop working, update yt-dlp.
 
 ## Run from source
 
-1. Install a Java 21 JDK, yt-dlp, and FFmpeg for format loading, merging, and audio conversion.
+1. Install a Java 21 JDK, yt-dlp, Deno, and FFmpeg for format loading, merging, and audio conversion.
 2. Open PowerShell in this folder.
 3. Run:
 

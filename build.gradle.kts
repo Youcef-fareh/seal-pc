@@ -22,6 +22,10 @@ val ffmpegUrl =
 val ffmpegSha256 = "17c80fdc5c8f59f24c2275b3f33ef9cded8fd789120dbd36d0ca91b30403ed4f"
 val ytDlpUrl = "https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/yt-dlp.exe"
 val ytDlpSha256 = "66674953fe251b89f4d08c5f0e35e0728679bd67ab3d7d05c0562af101dd3e7a"
+val denoArchive = layout.buildDirectory.file("deno/deno-x86_64-pc-windows-msvc.zip")
+val denoUrl =
+    "https://github.com/denoland/deno/releases/download/v2.9.7/deno-x86_64-pc-windows-msvc.zip"
+val denoSha256 = "a0c3101b4158d1dfb7d6a78a7bf0f3de80c96bb423c152beec8beb22786f2238"
 
 fun sha256(file: File): String {
     val digest = MessageDigest.getInstance("SHA-256")
@@ -115,6 +119,52 @@ val prepareYtDlp = tasks.register("prepareYtDlp") {
     }
 }
 
+val downloadDeno = tasks.register("downloadDeno") {
+    val archiveFile = denoArchive.get().asFile
+    outputs.file(archiveFile)
+
+    doLast {
+        if (!archiveFile.isFile) {
+            archiveFile.parentFile.mkdirs()
+            val partialFile = archiveFile.resolveSibling("${archiveFile.name}.part")
+            partialFile.delete()
+            URI(denoUrl).toURL().openStream().use { input ->
+                partialFile.outputStream().use(input::copyTo)
+            }
+            check(sha256(partialFile) == denoSha256) {
+                "Deno archive checksum mismatch. Update the pinned checksum before packaging."
+            }
+            Files.move(partialFile.toPath(), archiveFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        }
+    }
+}
+
+val prepareDeno = tasks.register("prepareDeno") {
+    val archiveFile = denoArchive.get().asFile
+    val executableFile = ffmpegResourcesDir.get().file("windows/deno.exe").asFile
+    dependsOn(downloadDeno)
+    inputs.file(archiveFile)
+    outputs.file(executableFile)
+
+    doLast {
+        check(sha256(archiveFile) == denoSha256) {
+            "Deno archive checksum mismatch. Update the pinned checksum before packaging."
+        }
+        executableFile.parentFile.mkdirs()
+        ZipFile(archiveFile).use { zip ->
+            val entry =
+                zip.entries().asSequence()
+                    .firstOrNull {
+                        !it.isDirectory && it.name.substringAfterLast('/').equals("deno.exe", ignoreCase = true)
+                    }
+                    ?: error("The Deno archive did not contain deno.exe.")
+            zip.getInputStream(entry).use { input ->
+                executableFile.outputStream().use(input::copyTo)
+            }
+        }
+    }
+}
+
 kotlin {
     jvmToolchain(21)
 }
@@ -151,11 +201,13 @@ compose.desktop {
 tasks.matching { it.name == "prepareAppResources" }.configureEach {
     dependsOn(prepareFfmpeg)
     dependsOn(prepareYtDlp)
+    dependsOn(prepareDeno)
 }
 
 tasks.matching { it.name == "packageExe" || it.name == "packageMsi" }.configureEach {
     dependsOn(prepareFfmpeg)
     dependsOn(prepareYtDlp)
+    dependsOn(prepareDeno)
 }
 
 tasks.test {

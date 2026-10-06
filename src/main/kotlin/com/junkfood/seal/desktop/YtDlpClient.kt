@@ -30,6 +30,7 @@ class YtDlpClient(private val executable: String) {
     private val json = Json { ignoreUnknownKeys = true }
     private val ytDlpExecutable = resolveYtDlpExecutable(executable)
     private val ffmpegLocationArguments = bundledFfmpegLocationArguments()
+    private val jsRuntimeArguments = bundledDenoArguments()
 
     fun version(): String = run(listOf("--version")).trim()
 
@@ -99,7 +100,7 @@ class YtDlpClient(private val executable: String) {
     ): String {
         val process =
             try {
-                ProcessBuilder(listOf(ytDlpExecutable) + ffmpegLocationArguments + arguments)
+                ProcessBuilder(listOf(ytDlpExecutable) + jsRuntimeArguments + ffmpegLocationArguments + arguments)
                     .redirectErrorStream(true)
                     .start()
             } catch (exception: Exception) {
@@ -161,6 +162,17 @@ internal fun bundledFfmpegLocationArguments(
     val ffmpegDirectory = resourcesDirectory?.let { File(it, "ffmpeg") } ?: return emptyList()
     return if (File(ffmpegDirectory, "ffmpeg.exe").isFile) {
         listOf("--ffmpeg-location", ffmpegDirectory.absolutePath)
+    } else {
+        emptyList()
+    }
+}
+
+internal fun bundledDenoArguments(
+    resourcesDirectory: String? = System.getProperty("compose.application.resources.dir"),
+): List<String> {
+    val denoExecutable = resourcesDirectory?.let { File(it, "deno.exe") } ?: return emptyList()
+    return if (denoExecutable.isFile) {
+        listOf("--js-runtimes", "deno:${denoExecutable.absolutePath}")
     } else {
         emptyList()
     }
