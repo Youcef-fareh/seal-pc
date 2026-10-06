@@ -15,6 +15,7 @@ import kotlinx.serialization.json.Json
 data class VideoDetails(
     val title: String = "",
     val uploader: String? = null,
+    val duration: Double? = null,
     val formats: List<VideoFormat> = emptyList(),
 )
 
@@ -22,8 +23,17 @@ data class VideoDetails(
 data class VideoFormat(
     val height: Int? = null,
     val vcodec: String? = null,
+    val acodec: String? = null,
+    val ext: String? = null,
+    val filesize: Long? = null,
+    val filesize_approx: Long? = null,
+    val abr: Double? = null,
 ) {
     fun hasVideo(): Boolean = !vcodec.isNullOrBlank() && vcodec != "none"
+
+    fun hasAudio(): Boolean = !acodec.isNullOrBlank() && acodec != "none"
+
+    fun estimatedSizeBytes(): Long? = (filesize ?: filesize_approx)?.takeIf { it > 0 }
 }
 
 class YtDlpClient(private val executable: String) {
@@ -176,6 +186,63 @@ internal fun bundledDenoArguments(
     } else {
         emptyList()
     }
+}
+
+internal fun estimateDownloadSizeBytes(
+    video: VideoDetails,
+    maxHeight: Int?,
+    audioFormat: String?,
+    audioQuality: String,
+): Long? {
+    if (audioFormat != null) {
+        val targetBitrateKbps = Regex("""^(\d+)K$""").matchEntire(audioQuality)?.groupValues?.get(1)?.toLongOrNull()
+        if (targetBitrateKbps != null && video.duration != null && video.duration.isFinite() && video.duration > 0) {
+            return (video.duration * targetBitrateKbps * 1000 / 8).toLong()
+        }
+        return video.formats
+            .filter { it.hasAudio() && !it.hasVideo() }
+            .maxByOrNull { it.abr ?: it.estimatedSizeBytes()?.toDouble() ?: 0.0 }
+            ?.estimatedSizeBytes()
+    }
+
+    val formats = video.formats
+    val videoFormats = formats.filter { it.hasVideo() && (maxHeight == null || (it.height ?: 0) <= maxHeight) }
+    val audioFormats = formats.filter { it.hasAudio() && !it.hasVideo() }
+    val mp4Videos = videoFormats.filter { it.ext == "mp4" }
+    val m4aAudios = audioFormats.filter { it.ext == "m4a" }
+
+    fun combinedSize(videoFormat: VideoFormat, audioFormat: VideoFormat): Long? {
+        val videoSize = videoFormat.estimatedSizeBytes() ?: return null
+        val audioSize = audioFormat.estimatedSizeBytes() ?: return null
+        return videoSize + audioSize
+    }
+
+    val preferredVideo = mp4Videos.maxByOrNull { it.height ?: 0 }
+    val preferredAudio = m4aAudios.maxByOrNull { it.abr ?: it.estimatedSizeBytes()?.toDouble() ?: 0.0 }
+    if (preferredVideo != null && preferredAudio != null) return combinedSize(preferredVideo, preferredAudio)
+
+    val fallbackVideo = videoFormats.maxByOrNull { it.height ?: 0 }
+    val fallbackAudio = audioFormats.maxByOrNull { it.abr ?: it.estimatedSizeBytes()?.toDouble() ?: 0.0 }
+    if (fallbackVideo != null && fallbackAudio != null) return combinedSize(fallbackVideo, fallbackAudio)
+
+    val muxedFormats =
+        formats.filter { it.hasVideo() && it.hasAudio() && (maxHeight == null || (it.height ?: 0) <= maxHeight) }
+    val mp4MuxedFormat = muxedFormats.filter { it.ext == "mp4" }.maxByOrNull { it.height ?: 0 }
+    if (mp4MuxedFormat != null) return mp4MuxedFormat.estimatedSizeBytes()
+    return muxedFormats.maxByOrNull { it.height ?: 0 }?.estimatedSizeBytes()
+}
+
+internal fun formatFileSize(bytes: Long): String {
+    if (bytes < 1024) return "$bytes B"
+    val units = listOf("KB", "MB", "GB", "TB")
+    var size = bytes.toDouble()
+    for (unit in units) {
+        size /= 1024
+        if (size < 1024 || unit == units.last()) {
+            return "${"%.1f".format(java.util.Locale.ROOT, size)} $unit"
+        }
+    }
+    return "$bytes B"
 }
 
 internal fun videoFormatSelector(maxHeight: Int?): String {

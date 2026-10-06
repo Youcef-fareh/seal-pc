@@ -76,6 +76,8 @@ private val english = mapOf(
     "videoAudio" to "Video + audio",
     "audio" to "Audio:",
     "quality" to "Quality:",
+    "estimatedSize" to "Estimated size:",
+    "sizeUnavailable" to "Unavailable",
     "best" to "Best available",
     "orLower" to "or lower",
     "saveTo" to "Save to:",
@@ -130,6 +132,8 @@ private val arabic = mapOf(
     "videoAudio" to "فيديو وصوت",
     "audio" to "الصوت:",
     "quality" to "الجودة:",
+    "estimatedSize" to "الحجم التقديري:",
+    "sizeUnavailable" to "غير متاح",
     "best" to "أفضل جودة متاحة",
     "orLower" to "أو أقل",
     "saveTo" to "الحفظ في:",
@@ -324,6 +328,10 @@ private fun SealDesktopApp(onExit: () -> Unit) {
             error = true
             return
         }
+        val selectedAudioFormat = if (audioOnly) audioFormat else null
+        val selectedAudioQuality =
+            if (audioQuality == "Best") "0"
+            else audioQuality.substringBefore(" kbps") + "K"
         queue.add(
             DownloadQueueItem(
                 id = UUID.randomUUID().toString(),
@@ -331,10 +339,18 @@ private fun SealDesktopApp(onExit: () -> Unit) {
                 title = video.title.ifBlank { url.trim() },
                 outputDirectory = outputFolder,
                 maxHeight = if (audioOnly) null else maxHeight,
-                audioFormat = if (audioOnly) audioFormat else null,
-                audioQuality =
-                    if (audioQuality == "Best") "0"
-                    else audioQuality.substringBefore(" kbps") + "K",
+                audioFormat = selectedAudioFormat,
+                audioQuality = selectedAudioQuality,
+                qualityLabel =
+                    if (audioOnly) "$audioFormat · $audioQuality"
+                    else maxHeight?.let { "$it p" } ?: tr("best"),
+                estimatedSizeBytes =
+                    estimateDownloadSizeBytes(
+                        video = video,
+                        maxHeight = if (audioOnly) null else maxHeight,
+                        audioFormat = selectedAudioFormat,
+                        audioQuality = selectedAudioQuality,
+                    ),
             ),
         )
         status = if (language == "ar") "تمت إضافة الفيديو إلى قائمة التنزيل." else "Video added to the download queue."
@@ -747,6 +763,14 @@ private fun QueueItemRow(
             Text(item.title, style = MaterialTheme.typography.titleSmall)
             Text(
                 "$statusText · ${if (item.audioFormat == null) strings.getValue("videoAudio") else strings.getValue("audioOnly")}",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                "${strings.getValue("quality")} ${item.qualityLabel}",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                "${strings.getValue("estimatedSize")} ${item.estimatedSizeBytes?.let(::formatFileSize) ?: strings.getValue("sizeUnavailable")}",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (item.status == QueueStatus.DOWNLOADING) {

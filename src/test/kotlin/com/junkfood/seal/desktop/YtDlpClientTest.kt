@@ -5,6 +5,7 @@ import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 
 class YtDlpClientTest {
     @Test
@@ -93,5 +94,48 @@ class YtDlpClientTest {
         assertEquals(emptyList(), bundledDenoArguments(null))
 
         resources.deleteRecursively()
+    }
+
+    @Test
+    fun estimatesVideoSizeFromSelectedStreamsAndRespectsHeightLimit() {
+        val video =
+            VideoDetails(
+                duration = 120.0,
+                formats =
+                    listOf(
+                        VideoFormat(height = 1080, vcodec = "avc1", ext = "mp4", filesize = 10_000),
+                        VideoFormat(height = 720, vcodec = "avc1", ext = "mp4", filesize_approx = 5_000),
+                        VideoFormat(vcodec = "none", acodec = "mp4a", ext = "m4a", filesize = 1_000),
+                    ),
+            )
+
+        assertEquals(11_000L, estimateDownloadSizeBytes(video, null, null, "0"))
+        assertEquals(6_000L, estimateDownloadSizeBytes(video, 720, null, "0"))
+    }
+
+    @Test
+    fun estimatesTargetAudioSizeAndFormatsByteCounts() {
+        val video = VideoDetails(duration = 60.0)
+
+        assertEquals(2_400_000L, estimateDownloadSizeBytes(video, null, "mp3", "320K"))
+        assertEquals("1.0 MB", formatFileSize(1_048_576))
+        assertNull(estimateDownloadSizeBytes(VideoDetails(), null, null, "0"))
+        assertNull(estimateDownloadSizeBytes(VideoDetails(duration = Double.NaN), null, "mp3", "320K"))
+    }
+
+    @Test
+    fun doesNotSubstituteAnotherFormatWhenSelectedFormatSizeIsUnavailable() {
+        val video =
+            VideoDetails(
+                formats =
+                    listOf(
+                        VideoFormat(height = 720, vcodec = "avc1", ext = "mp4"),
+                        VideoFormat(vcodec = "none", acodec = "mp4a", ext = "m4a"),
+                        VideoFormat(height = 480, vcodec = "vp9", ext = "webm", filesize = 20_000),
+                        VideoFormat(vcodec = "none", acodec = "opus", ext = "webm", filesize = 2_000),
+                    ),
+            )
+
+        assertNull(estimateDownloadSizeBytes(video, null, null, "0"))
     }
 }

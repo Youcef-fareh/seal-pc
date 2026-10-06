@@ -19,6 +19,8 @@ internal data class DownloadQueueItem(
     val maxHeight: Int?,
     val audioFormat: String?,
     val audioQuality: String,
+    val qualityLabel: String,
+    val estimatedSizeBytes: Long?,
     val status: QueueStatus = QueueStatus.WAITING,
     val progress: Float = 0f,
     val message: String = "",
