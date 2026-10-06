@@ -68,26 +68,6 @@ val prepareFfmpeg = tasks.register("prepareFfmpeg") {
             "FFmpeg archive checksum mismatch. Update the pinned checksum before packaging."
         }
 
-        val prepareYtDlp = tasks.register("prepareYtDlp") {
-            val executableFile = ffmpegResourcesDir.get().file("windows/yt-dlp.exe").asFile
-            outputs.file(executableFile)
-
-            doLast {
-                if (!executableFile.isFile || sha256(executableFile) != ytDlpSha256) {
-                    executableFile.parentFile.mkdirs()
-                    val partialFile = executableFile.resolveSibling("${executableFile.name}.part")
-                    partialFile.delete()
-                    URI(ytDlpUrl).toURL().openStream().use { input ->
-                        partialFile.outputStream().use(input::copyTo)
-                    }
-                    check(sha256(partialFile) == ytDlpSha256) {
-                        "yt-dlp checksum mismatch. Update the pinned checksum before packaging."
-                    }
-                    Files.move(partialFile.toPath(), executableFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
-                }
-            }
-        }
-
         resourceDirectory.deleteRecursively()
         check(resourceDirectory.mkdirs()) { "Could not create the FFmpeg resources directory." }
         var ffmpegFound = false
@@ -111,6 +91,26 @@ val prepareFfmpeg = tasks.register("prepareFfmpeg") {
         }
         check(ffmpegFound && ffprobeFound) {
             "The FFmpeg archive did not contain the expected Windows executables."
+        }
+    }
+}
+
+val prepareYtDlp = tasks.register("prepareYtDlp") {
+    val executableFile = ffmpegResourcesDir.get().file("windows/yt-dlp.exe").asFile
+    outputs.file(executableFile)
+
+    doLast {
+        if (!executableFile.isFile || sha256(executableFile) != ytDlpSha256) {
+            executableFile.parentFile.mkdirs()
+            val partialFile = executableFile.resolveSibling("${executableFile.name}.part")
+            partialFile.delete()
+            URI(ytDlpUrl).toURL().openStream().use { input ->
+                partialFile.outputStream().use(input::copyTo)
+            }
+            check(sha256(partialFile) == ytDlpSha256) {
+                "yt-dlp checksum mismatch. Update the pinned checksum before packaging."
+            }
+            Files.move(partialFile.toPath(), executableFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
         }
     }
 }
