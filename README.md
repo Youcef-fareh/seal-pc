@@ -8,14 +8,14 @@ A Windows desktop companion to Seal for downloading videos and audio from YouTub
 
 - Windows 10 or later (64-bit)
 - Java 21 for running from source
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp#installation) available on `PATH`, or the path to `yt-dlp.exe`
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp#installation) available on `PATH`, or the path to `yt-dlp.exe` (not required for the Windows installer)
 - FFmpeg available on `PATH` for running from source; the Windows installers bundle FFmpeg for format merging and audio conversion
 
-The app does not bundle yt-dlp, which must be installed separately. Windows installers include an LGPL shared build of FFmpeg, so users do not need to install FFmpeg or add it to `PATH`. Running from source still requires FFmpeg on `PATH`. The FFmpeg build is downloaded and checksum-verified during packaging. YouTube may change its service at any time; if downloads stop working, update yt-dlp.
+The Windows installers bundle yt-dlp and an LGPL shared build of FFmpeg, so users do not need to install either tool or add them to `PATH`. Running from source still requires yt-dlp and FFmpeg installed separately. Both bundled tools are downloaded and checksum-verified during packaging. YouTube may change its service at any time; if downloads stop working, update yt-dlp.
 
 ## Run from source
 
-1. Install a Java 21 JDK, yt-dlp, and FFmpeg for format merging and audio conversion.
+1. Install a Java 21 JDK, yt-dlp, and FFmpeg for format loading, merging, and audio conversion.
 2. Open PowerShell in this folder.
 3. Run:
 

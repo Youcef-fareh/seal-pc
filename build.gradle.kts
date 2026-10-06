@@ -20,6 +20,8 @@ val ffmpegArchive = layout.buildDirectory.file("ffmpeg/ffmpeg-N-127203-ga35c8799
 val ffmpegUrl =
     "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-05-13-07/ffmpeg-N-127203-ga35c879992-win64-lgpl-shared.zip"
 val ffmpegSha256 = "17c80fdc5c8f59f24c2275b3f33ef9cded8fd789120dbd36d0ca91b30403ed4f"
+val ytDlpUrl = "https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/yt-dlp.exe"
+val ytDlpSha256 = "66674953fe251b89f4d08c5f0e35e0728679bd67ab3d7d05c0562af101dd3e7a"
 
 fun sha256(file: File): String {
     val digest = MessageDigest.getInstance("SHA-256")
@@ -64,6 +66,26 @@ val prepareFfmpeg = tasks.register("prepareFfmpeg") {
     doLast {
         check(sha256(archiveFile) == ffmpegSha256) {
             "FFmpeg archive checksum mismatch. Update the pinned checksum before packaging."
+        }
+
+        val prepareYtDlp = tasks.register("prepareYtDlp") {
+            val executableFile = ffmpegResourcesDir.get().file("windows/yt-dlp.exe").asFile
+            outputs.file(executableFile)
+
+            doLast {
+                if (!executableFile.isFile || sha256(executableFile) != ytDlpSha256) {
+                    executableFile.parentFile.mkdirs()
+                    val partialFile = executableFile.resolveSibling("${executableFile.name}.part")
+                    partialFile.delete()
+                    URI(ytDlpUrl).toURL().openStream().use { input ->
+                        partialFile.outputStream().use(input::copyTo)
+                    }
+                    check(sha256(partialFile) == ytDlpSha256) {
+                        "yt-dlp checksum mismatch. Update the pinned checksum before packaging."
+                    }
+                    Files.move(partialFile.toPath(), executableFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                }
+            }
         }
 
         resourceDirectory.deleteRecursively()
@@ -128,10 +150,12 @@ compose.desktop {
 
 tasks.matching { it.name == "prepareAppResources" }.configureEach {
     dependsOn(prepareFfmpeg)
+    dependsOn(prepareYtDlp)
 }
 
 tasks.matching { it.name == "packageExe" || it.name == "packageMsi" }.configureEach {
     dependsOn(prepareFfmpeg)
+    dependsOn(prepareYtDlp)
 }
 
 tasks.test {

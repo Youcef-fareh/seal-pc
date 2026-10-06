@@ -65,4 +65,19 @@ class YtDlpClientTest {
 
         resources.deleteRecursively()
     }
+
+    @Test
+    fun prefersBundledYtDlpForDefaultCommandButPreservesCustomExecutable() {
+        val resources = Files.createTempDirectory("seal-resources").toFile()
+        val bundledYtDlp = File(resources, "yt-dlp.exe").apply { createNewFile() }
+
+        assertEquals(
+            bundledYtDlp.absolutePath,
+            resolveYtDlpExecutable("yt-dlp", resources.absolutePath),
+        )
+        assertEquals("C:\\tools\\yt-dlp.exe", resolveYtDlpExecutable("C:\\tools\\yt-dlp.exe", resources.absolutePath))
+        assertEquals("yt-dlp", resolveYtDlpExecutable("yt-dlp", null))
+
+        resources.deleteRecursively()
+    }
 }

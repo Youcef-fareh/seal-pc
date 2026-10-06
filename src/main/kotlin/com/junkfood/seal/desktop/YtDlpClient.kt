@@ -28,6 +28,7 @@ data class VideoFormat(
 
 class YtDlpClient(private val executable: String) {
     private val json = Json { ignoreUnknownKeys = true }
+    private val ytDlpExecutable = resolveYtDlpExecutable(executable)
     private val ffmpegLocationArguments = bundledFfmpegLocationArguments()
 
     fun version(): String = run(listOf("--version")).trim()
@@ -98,7 +99,7 @@ class YtDlpClient(private val executable: String) {
     ): String {
         val process =
             try {
-                ProcessBuilder(listOf(executable) + ffmpegLocationArguments + arguments)
+                ProcessBuilder(listOf(ytDlpExecutable) + ffmpegLocationArguments + arguments)
                     .redirectErrorStream(true)
                     .start()
             } catch (exception: Exception) {
@@ -142,6 +143,16 @@ class YtDlpClient(private val executable: String) {
 
         return synchronized(lines) { lines.joinToString("\n") }
     }
+}
+
+internal fun resolveYtDlpExecutable(
+    configuredExecutable: String,
+    resourcesDirectory: String? = System.getProperty("compose.application.resources.dir"),
+): String {
+    val configured = configuredExecutable.trim().ifBlank { "yt-dlp" }
+    if (!configured.equals("yt-dlp", ignoreCase = true)) return configured
+    val bundledExecutable = resourcesDirectory?.let { File(it, "yt-dlp.exe") }
+    return if (bundledExecutable?.isFile == true) bundledExecutable.absolutePath else configured
 }
 
 internal fun bundledFfmpegLocationArguments(
