@@ -206,16 +206,31 @@ class YtDlpClient(private val executable: String) {
             format = subtitleFormat,
             audioOnly = audioFormat != null,
         )
+        args += subtitleThrottleArguments(subtitleSource)
         args += parsedCustomArguments
 
         args += validatedUrl
-        run(
-            args,
-            onProgress,
-            captureOutput = false,
-            control = control,
-            extraPathDirectories = aria2cPath?.let { listOf(File(it).absoluteFile.parent) }.orEmpty(),
-        )
+        try {
+            run(
+                args,
+                onProgress,
+                captureOutput = false,
+                control = control,
+                extraPathDirectories = aria2cPath?.let { listOf(File(it).absoluteFile.parent) }.orEmpty(),
+            )
+        } catch (exception: IllegalStateException) {
+            if (subtitleSource == "off" || !isSubtitleDownloadFailure(exception.message.orEmpty())) {
+                throw exception
+            }
+            onProgress("WARNING: Subtitle download failed; retrying the video without subtitles.")
+            run(
+                withoutSubtitleArguments(args),
+                onProgress,
+                captureOutput = false,
+                control = control,
+                extraPathDirectories = aria2cPath?.let { listOf(File(it).absoluteFile.parent) }.orEmpty(),
+            )
+        }
     }
 
     private fun run(
@@ -394,6 +409,35 @@ internal fun subtitleArguments(
         addAll(listOf("--convert-subs", format))
     }
 }
+
+internal fun isSubtitleDownloadFailure(message: String): Boolean {
+    val normalized = message.lowercase()
+    return "subtitle" in normalized &&
+        ("error:" in normalized || "unable to" in normalized || "failed" in normalized)
+}
+
+internal fun withoutSubtitleArguments(arguments: List<String>): List<String> {
+    val flags = setOf("--write-subs", "--write-auto-subs", "--embed-subs")
+    val optionsWithValues =
+        setOf("--sub-langs", "--convert-subs", "--sleep-requests", "--sleep-subtitles")
+    val result = mutableListOf<String>()
+    var index = 0
+    while (index < arguments.size) {
+        when {
+            arguments[index] in flags -> index++
+            arguments[index] in optionsWithValues -> index += 2
+            else -> result += arguments[index++]
+        }
+    }
+    return result
+}
+
+internal fun subtitleThrottleArguments(source: String): List<String> =
+    if (source == "off") {
+        emptyList()
+    } else {
+        listOf("--sleep-requests", "1", "--sleep-subtitles", "5")
+    }
 
 internal fun isNetscapeCookieFile(file: File): Boolean =
     file.isFile && file.canRead() && runCatching {

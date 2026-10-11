@@ -44,6 +44,40 @@ class YtDlpClientTest {
     }
 
     @Test
+    fun retriesSubtitleFailuresWithoutSuppressingUnrelatedDownloadErrors() {
+        val subtitleError = "ERROR: Unable to download video subtitles for 'ar': HTTP Error 429"
+        assertEquals(true, isSubtitleDownloadFailure(subtitleError))
+        assertEquals(false, isSubtitleDownloadFailure("ERROR: Unable to download video: HTTP Error 429"))
+        assertEquals(emptyList(), subtitleThrottleArguments("off"))
+        assertEquals(
+            listOf("--sleep-requests", "1", "--sleep-subtitles", "5"),
+            subtitleThrottleArguments("auto"),
+        )
+
+        assertEquals(
+            listOf("--ignore-config", "--socket-timeout", "30", "https://youtu.be/abc123"),
+            withoutSubtitleArguments(
+                listOf(
+                    "--ignore-config",
+                    "--write-auto-subs",
+                    "--sub-langs",
+                    "ar",
+                    "--embed-subs",
+                    "--convert-subs",
+                    "srt",
+                    "--sleep-requests",
+                    "1",
+                    "--sleep-subtitles",
+                    "5",
+                    "--socket-timeout",
+                    "30",
+                    "https://youtu.be/abc123",
+                ),
+            ),
+        )
+    }
+
+    @Test
     fun preventsAdvancedSubtitleOptionsFromConflictingWithDedicatedControls() {
         val args = parseCustomYtDlpArguments("--sub-langs\nen")
         assertFailsWith<IllegalArgumentException> { validateSubtitleCustomArguments("auto", args) }

@@ -194,6 +194,7 @@ compose.desktop {
             description = "A Windows desktop video and audio downloader"
             vendor = "Seal Desktop"
             appResourcesRootDir.set(ffmpegResourcesDir)
+            modules("jdk.httpserver")
             windows {
                 shortcut = true
             }
