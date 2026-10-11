@@ -12,20 +12,20 @@ class StorageManagerTest {
     fun scansFolderSizesAndFindsOnlyOldPartialFiles() {
         val root = Files.createTempDirectory("seal-storage").toFile()
         try {
-            val now = System.currentTimeMillis()
+            val now = 4_000_000_000_000L
             val regular = File(root, "video.mp4").apply { writeBytes(ByteArray(20)) }
             val oldPartial = File(root, "old.part").apply {
                 writeBytes(ByteArray(10))
-                setLastModified(now - Duration.ofDays(31).toMillis())
+                check(setLastModified(now - Duration.ofDays(31).toMillis()))
             }
             val recentPartial = File(root, "recent.part").apply {
                 writeText("keep")
-                setLastModified(now - Duration.ofDays(1).toMillis())
+                check(setLastModified(now - Duration.ofDays(1).toMillis()))
             }
             val result = scanDownloadStorage(listOf(root), nowMillis = now)
 
             assertEquals(34L, result.bytes)
-            assertEquals(listOf(oldPartial), result.oldPartialFiles)
+            assertEquals(listOf(oldPartial.name), result.oldPartialFiles.map(File::getName))
             assertEquals(regular.length() + oldPartial.length() + recentPartial.length(), result.bytes)
         } finally {
             root.deleteRecursively()
