@@ -1,7 +1,6 @@
 package com.junkfood.seal.desktop
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,8 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -90,6 +87,23 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
 private val accent = Color(0xFFE53935)
+private val lightColors =
+    lightColorScheme(
+        primary = Color(0xFFC62828),
+        onPrimary = Color.White,
+        primaryContainer = Color(0xFFFFDAD6),
+        onPrimaryContainer = Color(0xFF410002),
+        secondary = Color(0xFF5F5E5E),
+        onSecondary = Color.White,
+        background = Color(0xFFF6F7F9),
+        surface = Color.White,
+        surfaceVariant = Color(0xFFEBEEF2),
+        onSurface = Color(0xFF191B1F),
+        onSurfaceVariant = Color(0xFF41464D),
+        outline = Color(0xFF73777F),
+        error = Color(0xFFBA1A1A),
+        onError = Color.White,
+    )
 private val highContrastColors =
     darkColorScheme(
         primary = Color(0xFFFFFF00),
@@ -116,7 +130,15 @@ private val english = mapOf(
     "light" to "Light",
     "dark" to "Dark",
     "highContrast" to "High contrast",
-    "settings" to "Download settings",
+    "settings" to "Settings",
+    "home" to "Downloads",
+    "appearance" to "Appearance and language",
+    "downloadSettings" to "Download preferences",
+    "downloadOptions" to "Download behavior and file naming",
+    "subtitleSettings" to "Subtitle options",
+    "networkSettings" to "Network and authentication",
+    "additionalSettings" to "Other download options",
+    "automationSettings" to "Automation and scheduling",
     "concurrentDownloads" to "Simultaneous downloads",
     "outputTemplate" to "Output template",
     "rateLimit" to "Speed limit (e.g. 1M)",
@@ -252,7 +274,15 @@ private val arabic = mapOf(
     "light" to "فاتح",
     "dark" to "داكن",
     "highContrast" to "تباين عالٍ",
-    "settings" to "إعدادات التنزيل",
+    "settings" to "الإعدادات",
+    "home" to "التنزيلات",
+    "appearance" to "المظهر واللغة",
+    "downloadSettings" to "تفضيلات التنزيل",
+    "downloadOptions" to "سلوك التنزيل وأسماء الملفات",
+    "subtitleSettings" to "خيارات الترجمة",
+    "networkSettings" to "الشبكة والمصادقة",
+    "additionalSettings" to "خيارات تنزيل أخرى",
+    "automationSettings" to "الأتمتة والجدولة",
     "concurrentDownloads" to "التنزيلات المتزامنة",
     "outputTemplate" to "قالب اسم الملف",
     "rateLimit" to "حد السرعة (مثل 1M)",
@@ -389,10 +419,8 @@ fun main() = application {
 }
 
 @Composable
-@OptIn(ExperimentalFoundationApi::class)
 private fun SealDesktopApp(onExit: () -> Unit) {
     val scope = rememberCoroutineScope()
-    val settingsBringIntoViewRequester = remember { BringIntoViewRequester() }
     val preferences = remember { Preferences.userNodeForPackage(AppUpdater::class.java) }
     val historyStore = remember { DownloadHistoryStore() }
     val queue = remember { mutableStateListOf<DownloadQueueItem>() }
@@ -405,6 +433,7 @@ private fun SealDesktopApp(onExit: () -> Unit) {
     var theme by remember {
         mutableStateOf(preferences.get("theme", "system").takeIf { it in setOf("system", "light", "dark", "high-contrast") } ?: "system")
     }
+    var showSettings by remember { mutableStateOf(false) }
     var downloadConcurrency by remember { mutableStateOf(preferences.getInt("downloadConcurrency", 1).coerceIn(1, 4)) }
     var outputTemplate by remember {
         mutableStateOf(preferences.get("outputTemplate", "%(title).200B [%(id)s].%(ext)s"))
@@ -1195,7 +1224,7 @@ private fun SealDesktopApp(onExit: () -> Unit) {
                 ) {
                     darkColorScheme(primary = accent)
                 } else {
-                    lightColorScheme(primary = accent)
+                    lightColors
                 },
         ) {
             Surface(
@@ -1223,7 +1252,7 @@ private fun SealDesktopApp(onExit: () -> Unit) {
                                     true
                                 }
                                 Key.O -> if (event.isShiftPressed) {
-                                    scope.launch { settingsBringIntoViewRequester.bringIntoView() }
+                                    showSettings = true
                                     true
                                 } else false
                                 Key.P -> if (event.isShiftPressed) {
@@ -1270,43 +1299,33 @@ private fun SealDesktopApp(onExit: () -> Unit) {
                             Text("Seal Desktop", style = MaterialTheme.typography.headlineMedium)
                             Text(tr("tagline"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        Text(tr("language"))
-                        Spacer(Modifier.width(8.dp))
-                        ChoiceMenu(
-                            selected = if (language == "ar") "العربية" else "English",
-                            options = listOf("English", "العربية"),
-                            enabled = true,
-                            onSelected = {
-                                language = if (it == "العربية") "ar" else "en"
-                                preferences.put("language", language)
-                                status = if (details == null) tr("pasteLink") else tr("formatsLoaded")
-                            },
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(tr("theme"))
-                        Spacer(Modifier.width(8.dp))
-                        ChoiceMenu(
-                            selected =
-                                when (theme) {
-                                    "light" -> tr("light")
-                                    "dark" -> tr("dark")
-                                    "high-contrast" -> tr("highContrast")
-                                    else -> tr("system")
-                                },
-                            options = listOf(tr("system"), tr("light"), tr("dark"), tr("highContrast")),
-                            enabled = true,
-                            onSelected = {
-                                theme = when (it) {
-                                    tr("light") -> "light"
-                                    tr("dark") -> "dark"
-                                    tr("highContrast") -> "high-contrast"
-                                    else -> "system"
-                                }
-                                preferences.put("theme", theme)
-                            },
-                        )
                     }
 
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        if (showSettings) {
+                            TextButton(onClick = { showSettings = false }) { Text(tr("home")) }
+                            Button(onClick = { showSettings = true }) { Text(tr("settings")) }
+                        } else {
+                            Button(onClick = { showSettings = false }) { Text(tr("home")) }
+                            TextButton(onClick = { showSettings = true }) { Text(tr("settings")) }
+                        }
+                    }
+
+                    Card {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                status,
+                                color =
+                                    if (error) MaterialTheme.colorScheme.error
+                                    else MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                    }
+
+                    if (!showSettings) {
                     Card(
                         colors =
                             CardDefaults.cardColors(
@@ -1644,6 +1663,7 @@ private fun SealDesktopApp(onExit: () -> Unit) {
                             }
                         }
                     }
+                    }
 
                     Card {
                         Column(
@@ -1759,12 +1779,63 @@ private fun SealDesktopApp(onExit: () -> Unit) {
                         }
                     }
 
-                    Card(modifier = Modifier.bringIntoViewRequester(settingsBringIntoViewRequester)) {
+                    if (showSettings) {
+                    Card {
                         Column(
                             modifier = Modifier.fillMaxWidth().padding(22.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            Text(tr("settings"), style = MaterialTheme.typography.titleMedium)
+                            Text(tr("appearance"), style = MaterialTheme.typography.titleMedium)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(tr("language"), modifier = Modifier.weight(1f))
+                                ChoiceMenu(
+                                    selected = if (language == "ar") "العربية" else "English",
+                                    options = listOf("English", "العربية"),
+                                    enabled = true,
+                                    onSelected = {
+                                        language = if (it == "العربية") "ar" else "en"
+                                        preferences.put("language", language)
+                                        status = if (details == null) tr("pasteLink") else tr("formatsLoaded")
+                                    },
+                                )
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(tr("theme"), modifier = Modifier.weight(1f))
+                                ChoiceMenu(
+                                    selected =
+                                        when (theme) {
+                                            "light" -> tr("light")
+                                            "dark" -> tr("dark")
+                                            "high-contrast" -> tr("highContrast")
+                                            else -> tr("system")
+                                        },
+                                    options = listOf(tr("system"), tr("light"), tr("dark"), tr("highContrast")),
+                                    enabled = true,
+                                    onSelected = {
+                                        theme = when (it) {
+                                            tr("light") -> "light"
+                                            tr("dark") -> "dark"
+                                            tr("highContrast") -> "high-contrast"
+                                            else -> "system"
+                                        }
+                                        preferences.put("theme", theme)
+                                    },
+                                )
+                            }
+                        }
+                    }
+
+                    Card {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(22.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Text(tr("downloadSettings"), style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                tr("downloadOptions"),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(tr("concurrentDownloads"), modifier = Modifier.weight(1f))
                                 ChoiceMenu(
@@ -1791,6 +1862,11 @@ private fun SealDesktopApp(onExit: () -> Unit) {
                                     )
                                 },
                                 singleLine = true,
+                            )
+                            Text(
+                                tr("subtitleSettings"),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.primary,
                             )
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(tr("subtitleSource"), modifier = Modifier.weight(1f))
@@ -1871,7 +1947,11 @@ private fun SealDesktopApp(onExit: () -> Unit) {
                                     )
                                 }
                             }
-                            Text(tr("schedulerNote"), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                tr("networkSettings"),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
                             OutlinedTextField(
                                 value = rateLimit,
                                 onValueChange = {
@@ -1941,6 +2021,11 @@ private fun SealDesktopApp(onExit: () -> Unit) {
                                 )
                                 Text(tr("cookieWarning"), color = MaterialTheme.colorScheme.error)
                             }
+                            Text(
+                                tr("additionalSettings"),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
                             SettingSwitch(
                                 label = tr("sponsorBlock"),
                                 checked = sponsorBlockCategories.isNotEmpty(),
@@ -2049,6 +2134,12 @@ private fun SealDesktopApp(onExit: () -> Unit) {
                                     lastClipboardText = ""
                                 },
                             )
+                            Text(
+                                tr("automationSettings"),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            Text(tr("schedulerNote"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                             OutlinedTextField(
                                 value = scheduleAt,
                                 onValueChange = { scheduleAt = it },
@@ -2125,20 +2216,6 @@ private fun SealDesktopApp(onExit: () -> Unit) {
 
                     Card {
                         Column(
-                            modifier = Modifier.fillMaxWidth().padding(18.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Text(
-                                status,
-                                color =
-                                    if (error) MaterialTheme.colorScheme.error
-                                    else MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
-                    }
-
-                    Card {
-                        Column(
                             modifier = Modifier.fillMaxWidth().padding(22.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
@@ -2210,6 +2287,7 @@ private fun SealDesktopApp(onExit: () -> Unit) {
                             style = MaterialTheme.typography.bodySmall,
                             textAlign = if (language == "ar") TextAlign.Right else TextAlign.Left,
                         )
+                    }
                     }
                 }
             }
