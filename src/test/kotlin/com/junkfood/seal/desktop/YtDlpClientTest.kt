@@ -9,19 +9,54 @@ import kotlin.test.assertNull
 
 class YtDlpClientTest {
     @Test
-    fun acceptsYouTubeVideoHosts() {
-        requireYouTubeUrl("https://www.youtube.com/watch?v=abc123")
-        requireYouTubeUrl("https://youtu.be/abc123")
+    fun acceptsAnyValidHttpOrHttpsHostForYtDlp() {
+        requireHttpUrl("https://www.youtube.com/watch?v=abc123")
+        requireHttpUrl("https://vimeo.com/123456")
+        requireHttpUrl("http://media.example.org/video?id=1")
+        requireHttpUrl("HTTP://MEDIA.EXAMPLE.ORG/video")
+        assertEquals(false, isValidHttpUrl("file://media.example.org/video"))
+        assertEquals(false, isValidHttpUrl("https:///missing-host"))
+        assertEquals(false, isValidHttpUrl("https://not a url"))
+        assertFailsWith<IllegalArgumentException> { requireHttpUrl("ftp://media.example.org/video") }
     }
 
     @Test
-    fun rejectsNonYouTubeHostsAndInvalidSchemes() {
+    fun mapsSubtitleOptionsForSourcesLanguagesFormatsAndMediaTypes() {
+        assertEquals(
+            listOf("--write-auto-subs", "--sub-langs", "ar,fr", "--embed-subs", "--convert-subs", "srt"),
+            subtitleArguments("auto", "ar, fr", embed = true, format = "srt", audioOnly = false),
+        )
+        assertEquals(
+            listOf("--write-subs", "--sub-langs", "en", "--convert-subs", "vtt"),
+            subtitleArguments("manual", "en", embed = false, format = "vtt", audioOnly = false),
+        )
+        assertEquals(
+            listOf("--write-subs", "--write-auto-subs", "--sub-langs", "all", "--convert-subs", "vtt"),
+            subtitleArguments("both", "all", embed = true, format = "vtt", audioOnly = true),
+        )
+        assertEquals(emptyList(), subtitleArguments("off", "invalid value", embed = true, format = "bad", audioOnly = false))
         assertFailsWith<IllegalArgumentException> {
-            requireYouTubeUrl("https://youtube.com.example.org/watch?v=abc123")
+            subtitleArguments("auto", "all,en", embed = false, format = "srt", audioOnly = false)
         }
         assertFailsWith<IllegalArgumentException> {
-            requireYouTubeUrl("file://youtube.com/video")
+            subtitleArguments("auto", "en/ar", embed = false, format = "srt", audioOnly = false)
         }
+    }
+
+    @Test
+    fun preventsAdvancedSubtitleOptionsFromConflictingWithDedicatedControls() {
+        val args = parseCustomYtDlpArguments("--sub-langs\nen")
+        assertFailsWith<IllegalArgumentException> { validateSubtitleCustomArguments("auto", args) }
+        validateSubtitleCustomArguments("off", args)
+    }
+
+    @Test
+    fun explainsUnsupportedExtractorErrorsWithoutHidingBackendDetails() {
+        val backendError = "ERROR: Unsupported URL: https://example.org/video"
+        val friendly = userFriendlyYtDlpError(backendError)
+        assertEquals(true, friendly.startsWith("This URL is invalid or this site is not supported by yt-dlp."))
+        assertEquals(true, friendly.contains(backendError))
+        assertEquals("ERROR: Network timeout", userFriendlyYtDlpError("ERROR: Network timeout"))
     }
 
     @Test
@@ -137,5 +172,90 @@ class YtDlpClientTest {
             )
 
         assertNull(estimateDownloadSizeBytes(video, null, null, "0"))
+    }
+
+    @Test
+    fun supportsExplicitVideoFormatSelectorsSafely() {
+        assertEquals(
+            "22",
+            videoFormatSelector(VideoFormat(format_id = "22", vcodec = "avc1", acodec = "mp4a")),
+        )
+        assertEquals(
+            "137+bestaudio/best",
+            videoFormatSelector(VideoFormat(format_id = "137", vcodec = "avc1", acodec = "none")),
+        )
+        assertNull(videoFormatSelector(VideoFormat(format_id = "137;deliberate", vcodec = "avc1")))
+    }
+
+    @Test
+    fun validatesOutputTemplatesAndProxyAddresses() {
+        assertEquals(
+            true,
+            isValidOutputTemplate("%(uploader)s/%(upload_date)s - %(title).200B [%(id)s].%(ext)s"),
+        )
+        assertEquals(false, isValidOutputTemplate("../%(title)s.%(ext)s"))
+        assertEquals(false, isValidOutputTemplate("%(unexpected)s.%(ext)s"))
+        assertEquals(false, isValidOutputTemplate("%(title)\\%(id)s.%(ext)s"))
+        assertEquals(true, isValidProxyUrl("socks5://127.0.0.1:1080"))
+        assertEquals(false, isValidProxyUrl("socks5://user:secret@127.0.0.1:1080"))
+        assertEquals(false, isValidProxyUrl("file://localhost/path"))
+    }
+
+    @Test
+    fun recognizesPlaylistUrlsAndBuildsSafeVideoLinks() {
+        assertEquals(true, isYouTubePlaylistUrl("https://www.youtube.com/playlist?list=PL123456"))
+        assertEquals(true, isYouTubePlaylistUrl("https://www.youtube.com/watch?v=abc123&list=PL123456"))
+        assertEquals(true, isYouTubePlaylistUrl("https://youtu.be/abc123?list=PL123456"))
+        assertEquals(false, isYouTubePlaylistUrl("https://youtu.be/abc123"))
+        assertEquals(true, isYouTubeVideoUrl("https://www.youtube.com/watch?v=abc123"))
+        assertEquals(true, isYouTubeVideoUrl("https://www.youtube.com/shorts/abc123"))
+        assertEquals(false, isYouTubeVideoUrl("https://www.youtube.com/playlist?list=PL123456"))
+        assertEquals("https://www.youtube.com/watch?v=abc123", playlistEntryUrl(PlaylistEntry(id = "abc123")))
+        assertEquals(
+            "https://www.youtube.com/watch?v=abc123",
+            playlistEntryUrl(PlaylistEntry(url = "abc123")),
+        )
+        assertNull(playlistEntryUrl(PlaylistEntry(id = "bad/id")))
+        assertEquals(
+            "https://youtu.be/abc123",
+            playlistEntryUrl(PlaylistEntry(id = "other123", webpage_url = "https://youtu.be/abc123")),
+        )
+    }
+
+    @Test
+    fun validatesSponsorBlockCategoriesAndCustomArgumentTemplates() {
+        assertEquals(true, isValidSponsorBlockCategories(listOf("sponsor", "intro")))
+        assertEquals(false, isValidSponsorBlockCategories(listOf("sponsor", "--exec")))
+        assertEquals(false, isValidSponsorBlockCategories(listOf("sponsor", "sponsor")))
+        assertEquals(
+            listOf("--format", "bestvideo+bestaudio/best", "--write-subs"),
+            parseCustomYtDlpArguments("--format\nbestvideo+bestaudio/best\n--write-subs"),
+        )
+        assertEquals(
+            listOf("--playlist-items=1-10"),
+            parseCustomYtDlpArguments("--playlist-items=1-10"),
+        )
+        assertFailsWith<IllegalArgumentException> { parseCustomYtDlpArguments("--exec\nwhoami") }
+        assertFailsWith<IllegalArgumentException> { parseCustomYtDlpArguments("--format") }
+        assertFailsWith<IllegalArgumentException> { parseCustomYtDlpArguments("--format\n--cookies-from-browser") }
+    }
+
+    @Test
+    fun acceptsOnlyNetscapeCookieFilesAndExistingAria2Executables() {
+        val directory = Files.createTempDirectory("seal-download-options").toFile()
+        try {
+            val cookieFile = File(directory, "cookies.txt").apply {
+                writeText("# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t0\tSID\tsecret\n")
+            }
+            val otherFile = File(directory, "other.txt").apply { writeText("not a cookie file") }
+            val aria2c = File(directory, "aria2c.exe").apply { writeText("binary placeholder") }
+
+            assertEquals(true, isNetscapeCookieFile(cookieFile))
+            assertEquals(false, isNetscapeCookieFile(otherFile))
+            assertEquals(true, isValidAria2cExecutable(aria2c.absolutePath))
+            assertEquals(false, isValidAria2cExecutable(File(directory, "missing.exe").absolutePath))
+        } finally {
+            directory.deleteRecursively()
+        }
     }
 }

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Seal Desktop Link Sender settings</title>
+    <style>
+      body { font: 16px system-ui, sans-serif; margin: 32px auto; max-width: 560px; padding: 0 16px; }
+      input { box-sizing: border-box; margin: 8px 0; padding: 8px; width: 100%; }
+      button { padding: 8px 12px; }
+    </style>
+  </head>
+  <body>
+    <h1>Seal Desktop Link Sender</h1>
+    <p>Paste the bridge token shown in Seal Desktop. Keep this token private.</p>
+    <label for="token">Bridge token</label>
+    <input id="token" type="password" autocomplete="off" spellcheck="false">
+    <button id="save">Save token</button>
+    <p id="status" role="status"></p>
+    <script src="options.js"></script>
+  </body>
+</html>

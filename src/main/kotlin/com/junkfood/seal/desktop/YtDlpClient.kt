@@ -15,16 +15,37 @@ import kotlinx.serialization.json.Json
 data class VideoDetails(
     val title: String = "",
     val uploader: String? = null,
+    val extractor: String? = null,
+    val extractor_key: String? = null,
     val duration: Double? = null,
     val formats: List<VideoFormat> = emptyList(),
 )
 
 @Serializable
+data class PlaylistDetails(
+    val title: String = "",
+    val uploader: String? = null,
+    val entries: List<PlaylistEntry?> = emptyList(),
+)
+
+@Serializable
+data class PlaylistEntry(
+    val id: String? = null,
+    val title: String? = null,
+    val url: String? = null,
+    val webpage_url: String? = null,
+    val duration: Double? = null,
+)
+
+@Serializable
 data class VideoFormat(
+    val format_id: String? = null,
     val height: Int? = null,
     val vcodec: String? = null,
     val acodec: String? = null,
     val ext: String? = null,
+    val fps: Double? = null,
+    val tbr: Double? = null,
     val filesize: Long? = null,
     val filesize_approx: Long? = null,
     val abr: Double? = null,
@@ -45,21 +66,45 @@ class YtDlpClient(private val executable: String) {
     fun version(): String = run(listOf("--version")).trim()
 
     fun fetchVideoDetails(url: String): VideoDetails {
-        requireYouTubeUrl(url)
+        val validatedUrl = url.trim().also(::requireHttpUrl)
         val output =
             run(
                 listOf(
                     "--quiet",
                     "--no-warnings",
                     "--no-playlist",
+                    "--ignore-config",
                     "--socket-timeout",
                     "30",
                     "--dump-single-json",
                     "--skip-download",
-                    url,
+                    validatedUrl,
                 ),
             )
         return json.decodeFromString(output)
+    }
+
+    fun fetchPlaylistDetails(url: String): PlaylistDetails {
+        val validatedUrl = url.trim().also(::requireHttpUrl)
+        require(isYouTubePlaylistUrl(validatedUrl)) { "Enter a YouTube playlist URL." }
+        val output =
+            run(
+                listOf(
+                    "--quiet",
+                    "--no-warnings",
+                    "--yes-playlist",
+                    "--flat-playlist",
+                    "--ignore-config",
+                    "--dump-single-json",
+                    "--skip-download",
+                    "--socket-timeout",
+                    "30",
+                    validatedUrl,
+                ),
+            )
+        val playlist = json.decodeFromString<PlaylistDetails>(output)
+        require(playlist.entries.isNotEmpty()) { "The playlist contains no available videos." }
+        return playlist
     }
 
     fun download(
@@ -69,10 +114,27 @@ class YtDlpClient(private val executable: String) {
         audioFormat: String?,
         audioQuality: String,
         control: DownloadControl = DownloadControl(),
+        formatSelector: String? = null,
+        outputTemplate: String = "%(title).200B [%(id)s].%(ext)s",
+        rateLimit: String? = null,
+        proxy: String? = null,
+        writeThumbnail: Boolean = false,
+        embedThumbnail: Boolean = false,
+        embedMetadata: Boolean = false,
+        embedChapters: Boolean = false,
+        aria2cExecutable: String? = null,
+        cookiesFile: String? = null,
+        sponsorBlockCategories: List<String> = emptyList(),
+        customArguments: String = "",
+        subtitleSource: String = "off",
+        subtitleLanguages: String = "en",
+        embedSubtitles: Boolean = false,
+        subtitleFormat: String = "srt",
         onProgress: (String) -> Unit,
     ) {
-        requireYouTubeUrl(url)
-        require(outputDirectory.isDirectory) { "Choose an existing download folder." }
+        val validatedUrl = url.trim().also(::requireHttpUrl)
+        check(outputDirectory.mkdirs() || outputDirectory.isDirectory) { "Could not create the download folder." }
+        require(isValidOutputTemplate(outputTemplate)) { "The output template contains unsupported placeholders." }
 
         val args =
             mutableListOf(
@@ -82,12 +144,49 @@ class YtDlpClient(private val executable: String) {
                 "--no-ignore-errors",
                 "--socket-timeout",
                 "30",
+                "--retries",
+                "10",
+                "--fragment-retries",
+                "infinite",
                 "--continue",
                 "--paths",
                 outputDirectory.absolutePath,
                 "-o",
-                "%(title).200B [%(id)s].%(ext)s",
+                outputTemplate,
             )
+        rateLimit?.takeIf { it.isNotBlank() }?.let {
+            require(Regex("""^\d+(?:\.\d+)?[KMG]?$""", RegexOption.IGNORE_CASE).matches(it)) {
+                "Enter a valid download speed limit, such as 1M or 500K."
+            }
+            args += listOf("--limit-rate", it)
+        }
+        proxy?.takeIf { it.isNotBlank() }?.let {
+            require(isValidProxyUrl(it)) {
+                "Enter a valid HTTP or SOCKS proxy URL."
+            }
+            args += listOf("--proxy", it)
+        }
+        cookiesFile?.takeIf { it.isNotBlank() }?.let {
+            require(isNetscapeCookieFile(File(it))) {
+                "Select a readable Netscape-format cookie file."
+            }
+            args += listOf("--cookies", File(it).absolutePath)
+        }
+        val aria2cPath =
+            aria2cExecutable?.trim()?.takeIf { it.isNotBlank() }?.also {
+                require(isValidAria2cExecutable(it)) { "Select an existing aria2c executable." }
+                args += listOf("--downloader", "aria2c", "--downloader-args", "aria2c:-x16 -k1M")
+            }
+        if (sponsorBlockCategories.isNotEmpty()) {
+            require(isValidSponsorBlockCategories(sponsorBlockCategories)) {
+                "Select supported SponsorBlock categories."
+            }
+            args += listOf("--sponsorblock-remove", sponsorBlockCategories.joinToString(","))
+        }
+        if (writeThumbnail) args += "--write-thumbnail"
+        if (embedThumbnail && audioFormat != null) args += "--embed-thumbnail"
+        if (embedMetadata) args += "--embed-metadata"
+        if (embedChapters) args += "--embed-chapters"
 
         if (audioFormat != null) {
             args += listOf("--extract-audio", "--audio-format", audioFormat)
@@ -95,11 +194,28 @@ class YtDlpClient(private val executable: String) {
                 args += listOf("--audio-quality", audioQuality)
             }
         } else {
-            args += listOf("--format", videoFormatSelector(maxHeight))
+            args += listOf("--format", formatSelector ?: videoFormatSelector(maxHeight))
         }
 
-        args += url
-        run(args, onProgress, captureOutput = false, control = control)
+        val parsedCustomArguments = parseCustomYtDlpArguments(customArguments)
+        validateSubtitleCustomArguments(subtitleSource, parsedCustomArguments)
+        args += subtitleArguments(
+            source = subtitleSource,
+            languages = subtitleLanguages,
+            embed = embedSubtitles,
+            format = subtitleFormat,
+            audioOnly = audioFormat != null,
+        )
+        args += parsedCustomArguments
+
+        args += validatedUrl
+        run(
+            args,
+            onProgress,
+            captureOutput = false,
+            control = control,
+            extraPathDirectories = aria2cPath?.let { listOf(File(it).absoluteFile.parent) }.orEmpty(),
+        )
     }
 
     private fun run(
@@ -107,10 +223,19 @@ class YtDlpClient(private val executable: String) {
         onLine: (String) -> Unit = {},
         captureOutput: Boolean = true,
         control: DownloadControl? = null,
+        extraPathDirectories: List<String> = emptyList(),
     ): String {
         val process =
             try {
                 ProcessBuilder(listOf(ytDlpExecutable) + jsRuntimeArguments + ffmpegLocationArguments + arguments)
+                    .apply {
+                        if (extraPathDirectories.isNotEmpty()) {
+                            val environment = environment()
+                            environment["PATH"] =
+                                (extraPathDirectories + environment["PATH"].orEmpty())
+                                    .joinToString(File.pathSeparator)
+                        }
+                    }
                     .redirectErrorStream(true)
                     .start()
             } catch (exception: Exception) {
@@ -154,6 +279,200 @@ class YtDlpClient(private val executable: String) {
 
         return synchronized(lines) { lines.joinToString("\n") }
     }
+}
+
+private val sponsorBlockCategories =
+    setOf(
+        "sponsor",
+        "intro",
+        "outro",
+        "selfpromo",
+        "preview",
+        "filler",
+        "interaction",
+        "music_offtopic",
+        "poi_highlight",
+        "exclusive_access",
+        "chapter",
+    )
+
+internal fun isValidSponsorBlockCategories(categories: List<String>): Boolean =
+    categories.isNotEmpty() && categories.distinct().size == categories.size &&
+        categories.all { it in sponsorBlockCategories }
+
+internal fun parseCustomYtDlpArguments(template: String): List<String> {
+    val valueOptions =
+        setOf(
+            "--format",
+            "--merge-output-format",
+            "--recode-video",
+            "--audio-format",
+            "--audio-quality",
+            "--sub-langs",
+            "--match-title",
+            "--reject-title",
+            "--date",
+            "--dateafter",
+            "--datebefore",
+            "--min-filesize",
+            "--max-filesize",
+            "--playlist-items",
+            "--extractor-args",
+            "--compat-options",
+        )
+    val flagOptions = setOf("--write-subs", "--write-auto-subs", "--embed-subs")
+    val lines = template.lineSequence().map(String::trim).filter { it.isNotEmpty() && !it.startsWith('#') }.toList()
+    require(template.length <= 7000) { "Custom templates may contain at most 7000 characters." }
+    require(lines.size <= 32) { "Custom templates may contain at most 32 arguments." }
+    require(lines.all { it.length <= 1000 && it.none(Char::isISOControl) }) {
+        "Custom template arguments contain unsupported control characters or exceed 1000 characters."
+    }
+
+    val result = mutableListOf<String>()
+    var expectsValue = false
+    lines.forEach { argument ->
+        if (expectsValue) {
+            require(!argument.startsWith("--") && argument.isNotBlank()) {
+                "Each custom option that takes a value must be followed by its value on the next line."
+            }
+            result += argument
+            expectsValue = false
+            return@forEach
+        }
+        val option = argument.substringBefore('=')
+        when {
+            option in valueOptions && '=' in argument -> {
+                require(argument.substringAfter('=').isNotBlank()) { "Custom option $option requires a value." }
+                result += argument
+            }
+            option in valueOptions -> {
+                result += option
+                expectsValue = true
+            }
+            argument in flagOptions -> result += argument
+            else -> throw IllegalArgumentException("Custom option is not allowed: $option")
+        }
+    }
+    require(!expectsValue) { "The last custom option is missing its value." }
+    return result
+}
+
+internal fun validateSubtitleCustomArguments(source: String, arguments: List<String>) {
+    if (source == "off") return
+    val subtitleOptions = setOf("--sub-langs", "--write-subs", "--write-auto-subs", "--embed-subs")
+    require(arguments.none { it.substringBefore('=') in subtitleOptions }) {
+        "Remove subtitle options from the advanced arguments while dedicated subtitle settings are enabled."
+    }
+}
+
+internal fun isValidSubtitleLanguages(languages: String): Boolean {
+    val values = languages.split(',').map(String::trim)
+    return languages.length <= 200 && values.isNotEmpty() &&
+        values.all { it.isNotEmpty() && Regex("""^[A-Za-z0-9_*.-]+$""").matches(it) } &&
+        (values.size == 1 || values.none { it.equals("all", ignoreCase = true) })
+}
+
+internal fun subtitleArguments(
+    source: String,
+    languages: String,
+    embed: Boolean,
+    format: String,
+    audioOnly: Boolean,
+): List<String> {
+    require(source in setOf("off", "manual", "auto", "both")) { "Choose a supported subtitle source." }
+    if (source == "off") return emptyList()
+    require(isValidSubtitleLanguages(languages)) {
+        "Enter subtitle language codes such as en, ar, fr, or all."
+    }
+    require(format in setOf("srt", "vtt")) { "Choose SRT or WebVTT as the subtitle format." }
+
+    return buildList {
+        if (source == "manual" || source == "both") add("--write-subs")
+        if (source == "auto" || source == "both") add("--write-auto-subs")
+        addAll(listOf("--sub-langs", languages.split(',').joinToString(",") { it.trim() }))
+        if (embed && !audioOnly) add("--embed-subs")
+        addAll(listOf("--convert-subs", format))
+    }
+}
+
+internal fun isNetscapeCookieFile(file: File): Boolean =
+    file.isFile && file.canRead() && runCatching {
+        file.useLines { lines ->
+            lines.take(5).any { it.trim() in setOf("# Netscape HTTP Cookie File", "# HTTP Cookie File") }
+        }
+    }.getOrDefault(false)
+
+internal fun isValidAria2cExecutable(executable: String): Boolean {
+    val file = File(executable)
+    return file.isFile && file.canRead() &&
+        (file.name.equals("aria2c", ignoreCase = true) || file.name.equals("aria2c.exe", ignoreCase = true))
+}
+
+internal fun isYouTubePlaylistUrl(url: String): Boolean {
+    val uri = runCatching { URI(url.trim()) }.getOrNull() ?: return false
+    val host = uri.host?.lowercase().orEmpty()
+    return uri.scheme?.lowercase() in setOf("http", "https") &&
+        (host == "youtube.com" || host.endsWith(".youtube.com") || host == "youtu.be") &&
+        uri.rawQuery.orEmpty().split('&')
+            .any { it.substringBefore('=') == "list" && it.substringAfter('=', "").isNotBlank() }
+}
+
+internal fun isYouTubeVideoUrl(url: String): Boolean {
+    val uri = runCatching { URI(url.trim()) }.getOrNull() ?: return false
+    if (uri.scheme?.lowercase() !in setOf("http", "https")) return false
+    val host = uri.host?.lowercase().orEmpty()
+    val videoIdPattern = Regex("""^[A-Za-z0-9_-]{6,}$""")
+    if (host == "youtu.be") return uri.path.orEmpty().removePrefix("/").let(videoIdPattern::matches)
+    if (host != "youtube.com" && !host.endsWith(".youtube.com")) return false
+    val path = uri.path.orEmpty()
+    return when {
+        path == "/watch" ->
+            uri.rawQuery.orEmpty().split('&')
+                .firstOrNull { it.substringBefore('=') == "v" }
+                ?.substringAfter('=', "")
+                ?.let(videoIdPattern::matches) == true
+        path.startsWith("/shorts/") || path.startsWith("/embed/") || path.startsWith("/live/") ->
+            path.substringAfterLast('/').let(videoIdPattern::matches)
+        else -> false
+    }
+}
+
+internal fun playlistEntryUrl(entry: PlaylistEntry): String? {
+    entry.webpage_url?.takeIf(::isYouTubeVideoUrl)?.let { return it }
+    entry.url?.takeIf(::isYouTubeVideoUrl)?.let { return it }
+    val videoId =
+        sequenceOf(entry.id, entry.url).filterNotNull()
+            .firstOrNull { Regex("""^[A-Za-z0-9_-]{6,}$""").matches(it) } ?: return null
+    return "https://www.youtube.com/watch?v=$videoId"
+}
+
+internal fun isValidOutputTemplate(template: String): Boolean {
+    if (
+        template.isBlank() || template.startsWith('/') || template.contains('\\') ||
+        template.contains("..") || Regex("""^[A-Za-z]:|[:*?"<>|]""").containsMatchIn(template)
+    ) return false
+    val placeholderPattern = Regex("""%\(([^)]+)\)(?:\.\d+)?[B]?[sdif]?""")
+    val withoutPlaceholders = placeholderPattern.replace(template, "")
+    if ('%' in withoutPlaceholders) return false
+    val allowed =
+        setOf("title", "id", "uploader", "upload_date", "resolution", "ext", "extractor", "extractor_key")
+    return placeholderPattern.findAll(template).all { it.groupValues[1] in allowed }
+}
+
+internal fun videoFormatSelector(format: VideoFormat): String? {
+    val id = format.format_id?.takeIf { Regex("""^[A-Za-z0-9._-]+$""").matches(it) } ?: return null
+    return if (format.hasAudio()) id else "$id+bestaudio/best"
+}
+
+internal fun isValidProxyUrl(proxy: String): Boolean {
+    val uri =
+        try {
+            URI(proxy)
+        } catch (_: Exception) {
+            return false
+        }
+    return uri.scheme in setOf("http", "https", "socks4", "socks4a", "socks5") &&
+        !uri.host.isNullOrBlank() && uri.userInfo == null
 }
 
 internal fun resolveYtDlpExecutable(
@@ -289,16 +608,22 @@ class DownloadPausedException : Exception()
 
 class DownloadCancelledException : Exception()
 
-internal fun requireYouTubeUrl(url: String) {
-    val uri =
-        try {
-            URI(url.trim())
-        } catch (exception: Exception) {
-            throw IllegalArgumentException("Enter a valid YouTube video URL.", exception)
-        }
-    val host = uri.host?.lowercase().orEmpty()
-    val isYouTubeHost = host == "youtube.com" || host.endsWith(".youtube.com") || host == "youtu.be"
-    require(uri.scheme in setOf("http", "https") && isYouTubeHost) {
-        "Enter a YouTube video URL (youtube.com or youtu.be)."
+internal fun isValidHttpUrl(url: String): Boolean {
+    val uri = runCatching { URI(url.trim()) }.getOrNull() ?: return false
+    return uri.scheme?.lowercase() in setOf("http", "https") && !uri.host.isNullOrBlank()
+}
+
+internal fun requireHttpUrl(url: String) {
+    require(isValidHttpUrl(url)) {
+        "Enter a valid HTTP or HTTPS URL. yt-dlp will determine whether the site is supported."
     }
 }
+
+internal fun userFriendlyYtDlpError(message: String): String =
+    if (Regex("""unsupported url|no suitable extractor|not a valid url""", RegexOption.IGNORE_CASE)
+            .containsMatchIn(message)
+    ) {
+        "This URL is invalid or this site is not supported by yt-dlp.\n$message"
+    } else {
+        message
+    }
