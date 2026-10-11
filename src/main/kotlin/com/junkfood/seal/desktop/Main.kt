@@ -1,6 +1,7 @@
 package com.junkfood.seal.desktop
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -61,11 +62,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import java.awt.Desktop
-import java.awt.DropTarget
-import java.awt.DropTargetAdapter
-import java.awt.DropTargetDropEvent
 import java.awt.Toolkit
 import java.awt.datatransfer.DataFlavor
+import java.awt.dnd.DropTarget
+import java.awt.dnd.DropTargetAdapter
+import java.awt.dnd.DropTargetDropEvent
 import java.awt.Window as AwtWindow
 import java.io.File
 import java.security.SecureRandom
@@ -388,6 +389,7 @@ fun main() = application {
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun SealDesktopApp(onExit: () -> Unit) {
     val scope = rememberCoroutineScope()
     val settingsBringIntoViewRequester = remember { BringIntoViewRequester() }
@@ -691,15 +693,18 @@ private fun SealDesktopApp(onExit: () -> Unit) {
         try {
             preferences.put("browserBridgeToken", browserBridgeToken)
             val bridge =
-                BrowserExtensionBridge(browserBridgeToken) { requestedUrl ->
-                    runBlocking {
-                        val completed = CompletableDeferred<Unit>()
-                        check(browserRequests.trySend(requestedUrl to completed).isSuccess) {
-                            "The browser bridge is no longer accepting requests."
+                BrowserExtensionBridge(
+                    token = browserBridgeToken,
+                    onEnqueue = { requestedUrl ->
+                        runBlocking {
+                            val completed = CompletableDeferred<Unit>()
+                            check(browserRequests.trySend(requestedUrl to completed).isSuccess) {
+                                "The browser bridge is no longer accepting requests."
+                            }
+                            withTimeout(5000) { completed.await() }
                         }
-                        withTimeout(5000) { completed.await() }
-                    }
-                }.apply { start() }
+                    },
+                ).apply { start() }
             browserBridge = bridge
             browserBridgeEnabled = true
             status = "Browser extension bridge listening at ${bridge.address}."
