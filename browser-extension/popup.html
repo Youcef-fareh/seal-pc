@@ -6,12 +6,15 @@
     <title>Send to Seal Desktop</title>
     <style>
       body { font: 14px system-ui, sans-serif; margin: 16px; width: 260px; }
-      button { padding: 8px 12px; width: 100%; }
+      button { box-sizing: border-box; padding: 8px 12px; width: 100%; }
+      button + button { margin-top: 8px; }
       #status { line-height: 1.4; overflow-wrap: anywhere; }
     </style>
   </head>
   <body>
     <button id="send">Add current video to Seal Desktop</button>
+    <button id="options" type="button">Set bridge token / extension settings</button>
+    <p>Works with single YouTube videos. This button is in your browser toolbar, not on the video page.</p>
     <p id="status" role="status"></p>
     <script src="popup.js"></script>
   </body>

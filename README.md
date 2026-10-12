@@ -60,7 +60,15 @@ The advanced yt-dlp argument template is saved with app preferences and settings
 
 ## Browser extension
 
-The optional Chrome/Edge Manifest V3 extension is in [`browser-extension/`](./browser-extension/). Load that folder as an unpacked extension from the browser's extensions page. In Seal Desktop, enable **Authenticated browser extension bridge** and copy its token into the extension's options page. With the desktop app running and the bridge enabled, click the extension on a single YouTube video to add it directly to the download queue. The bridge binds only to `127.0.0.1`, accepts only extension-origin requests, requires the private bearer token, rejects playlists, and is stopped when the app closes or the setting is disabled. The token is stored in local app preferences and is not included in settings backups.
+The optional Chrome/Edge Manifest V3 extension is in [`browser-extension/`](./browser-extension/). To set it up:
+
+1. Open `chrome://extensions` (Chrome) or `edge://extensions` (Edge), turn on **Developer mode**, and choose **Load unpacked**. Select the `browser-extension` folder.
+2. In Seal Desktop, open **Settings** → **Network and authentication**, turn on **Enable authenticated browser extension bridge**, and choose **Copy token**.
+3. Open the browser's **Extensions** menu, select **Seal Desktop Link Sender** → **Extension options**, paste the token, and choose **Save token**. You can also open these settings from the extension popup.
+4. Pin **Seal Desktop Link Sender** from the browser's Extensions menu so its toolbar button stays visible. Keep Seal Desktop open with the bridge enabled.
+5. Open a single YouTube video, click the pinned toolbar button, then choose **Add current video to Seal Desktop**. This queues the video in Seal Desktop; choose **Start downloads** in the app to begin downloading.
+
+The extension does not show an icon over the video page and currently supports single YouTube videos only, not Instagram. For other yt-dlp-supported sites, paste the video URL into Seal Desktop directly. The bridge binds only to `127.0.0.1`, accepts only extension-origin requests, requires the private bearer token, rejects playlists, and is stopped when the app closes or the setting is disabled. The token is stored in local app preferences and is not included in settings backups.
 
 Choose **System**, **Light**, **Dark**, or **High contrast** appearance from the theme menu. The layout is scrollable and constrained to a readable maximum width, and interactive controls expose their labels to assistive technology. English and Arabic are supported, with right-to-left layout for Arabic. yt-dlp-supported sites can be loaded as individual downloads; YouTube playlists additionally support selecting individual entries.
 

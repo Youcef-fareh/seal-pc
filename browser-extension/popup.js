@@ -1,5 +1,9 @@
 const status = document.getElementById("status");
 
+document.getElementById("options").addEventListener("click", () => {
+  chrome.runtime.openOptionsPage();
+});
+
 document.getElementById("send").addEventListener("click", async () => {
   status.textContent = "";
   try {
