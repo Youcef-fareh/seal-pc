@@ -30,14 +30,14 @@ The first launch can take a few minutes while Gradle downloads its dependencies.
 ## Build Windows installers
 
 ```powershell
-.\gradlew.bat packageExe packageMsi
+.\gradlew.bat packageMsi
 ```
 
-The `.exe` and `.msi` installers are created under `build/compose/binaries/main/exe/` and `build/compose/binaries/main/msi/`.
+The standalone `.msi` installer is created under `build/compose/binaries/main/msi/`. It bundles the Java runtime, yt-dlp, Deno, and FFmpeg; users do not need to download or install additional components after setup.
 
 ## Download the Windows app
 
-The GitHub Actions workflow tests the project and builds both Windows installers. Open the repository's **Actions** tab and download the `seal-desktop-windows-installers` artifact from a successful run. To publish both installers on a GitHub Release, push a version tag such as `v1.0.0`; the workflow attaches the installers to that release automatically.
+The GitHub Actions workflow tests the project and builds the standalone MSI. Open the repository's **Actions** tab and download the `seal-desktop-windows-installer` artifact from a successful run. To publish the installer on a GitHub Release, push a version tag such as `v1.0.0`; the workflow attaches the MSI to that release automatically.
 
 Seal Desktop checks GitHub Releases for updates at startup and offers **Download & install** or **Remind me later**. It downloads the full Windows MSI only after you choose to install. Windows starts the MSI installer so you can review and confirm the installation. Reminders are snoozed for 24 hours.
 
