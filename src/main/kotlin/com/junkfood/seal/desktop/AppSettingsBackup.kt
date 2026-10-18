@@ -31,6 +31,8 @@ internal data class AppSettingsBackup(
     val subtitleLanguages: String = "en",
     val embedSubtitles: Boolean = false,
     val subtitleFormat: String = "srt",
+    val subtitlesOnly: Boolean = false,
+    val autoTranslatedSubtitles: Boolean = true,
 ) {
     fun validate() {
         require(language in setOf("en", "ar")) { "Settings backup has an unsupported language." }

@@ -74,5 +74,7 @@ class AppSettingsBackupTest {
             subtitleLanguages = "ar,fr",
             embedSubtitles = true,
             subtitleFormat = "vtt",
+            subtitlesOnly = true,
+            autoTranslatedSubtitles = false,
         )
 }

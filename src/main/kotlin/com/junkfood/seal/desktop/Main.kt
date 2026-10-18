@@ -184,6 +184,8 @@ private val english = mapOf(
     "subtitleLanguageCustom" to "Custom codes",
     "subtitleEmbed" to "Embed subtitles in video",
     "subtitleFormat" to "Subtitle format",
+    "subtitleAutoTranslated" to "Include auto-translated captions",
+    "subtitleAutoTranslatedHelp" to "Download platform machine-translated captions (for example YouTube translations). Turn off to keep only the original-language automatic captions.",
     "subtitleHelp" to "Automatic captions are downloaded when the platform provides them. Audio-only downloads save subtitles as sidecar files.",
     "schedule" to "Schedule queue (YYYY-MM-DD HH:MM)",
     "scheduleQueue" to "Schedule",
@@ -210,6 +212,8 @@ private val english = mapOf(
     "type" to "Type:",
     "audioOnly" to "Audio only",
     "videoAudio" to "Video + audio",
+    "subtitlesOnly" to "Subtitles only",
+    "subtitlesOnlyHelp" to "Downloads subtitles only, using the source, languages, and format chosen below.",
     "audio" to "Audio:",
     "quality" to "Quality:",
     "automaticFormat" to "Automatic format",
@@ -328,6 +332,8 @@ private val arabic = mapOf(
     "subtitleLanguageCustom" to "رموز مخصصة",
     "subtitleEmbed" to "تضمين الترجمة في الفيديو",
     "subtitleFormat" to "تنسيق الترجمة",
+    "subtitleAutoTranslated" to "تضمين الترجمات المترجمة آليًا",
+    "subtitleAutoTranslatedHelp" to "ينزّل الترجمات التي تترجمها المنصة آليًا (مثل ترجمات يوتيوب). أوقفه للاحتفاظ بالترجمات التلقائية بلغة الأصل فقط.",
     "subtitleHelp" to "يتم تنزيل الترجمة التلقائية عند توفرها. تُحفظ الترجمات كملفات جانبية عند تنزيل الصوت فقط.",
     "schedule" to "جدولة القائمة (YYYY-MM-DD HH:MM)",
     "scheduleQueue" to "جدولة",
@@ -354,6 +360,8 @@ private val arabic = mapOf(
     "type" to "النوع:",
     "audioOnly" to "صوت فقط",
     "videoAudio" to "فيديو وصوت",
+    "subtitlesOnly" to "الترجمات فقط",
+    "subtitlesOnlyHelp" to "ينزّل الترجمات فقط، باستخدام المصدر واللغات والتنسيق المحددين أدناه.",
     "audio" to "الصوت:",
     "quality" to "الجودة:",
     "automaticFormat" to "التنسيق التلقائي",
@@ -459,6 +467,9 @@ private fun SealDesktopApp(onExit: () -> Unit) {
     var subtitleFormat by remember {
         mutableStateOf(preferences.get("subtitleFormat", "srt").takeIf { it in setOf("srt", "vtt") } ?: "srt")
     }
+    var autoTranslatedSubtitles by remember {
+        mutableStateOf(preferences.getBoolean("autoTranslatedSubtitles", true))
+    }
     var browserBridgeEnabled by remember { mutableStateOf(false) }
     var browserBridgeToken by remember {
         mutableStateOf(preferences.get("browserBridgeToken", "").ifBlank { createBrowserBridgeToken() })
@@ -470,6 +481,13 @@ private fun SealDesktopApp(onExit: () -> Unit) {
     var scheduledStartMillis by remember { mutableStateOf(0L) }
     val strings = if (language == "ar") arabic else english
     fun tr(key: String) = strings[key] ?: english.getValue(key)
+    fun subtitleSourceLabel(source: String) =
+        when (source) {
+            "manual" -> tr("subtitleManual")
+            "auto" -> tr("subtitleAuto")
+            "both" -> tr("subtitleBoth")
+            else -> tr("subtitleOff")
+        }
 
     var url by remember { mutableStateOf("") }
     var executable by remember { mutableStateOf(preferences.get("executable", "yt-dlp")) }
@@ -489,6 +507,7 @@ private fun SealDesktopApp(onExit: () -> Unit) {
     var detectedClipboardUrl by remember { mutableStateOf("") }
     var lastClipboardText by remember { mutableStateOf("") }
     var audioOnly by remember { mutableStateOf(preferences.getBoolean("audioOnly", false)) }
+    var subtitlesOnly by remember { mutableStateOf(preferences.getBoolean("subtitlesOnly", false)) }
     var audioFormat by remember {
         mutableStateOf(preferences.get("audioFormat", "mp3").takeIf { it in audioFormats } ?: "mp3")
     }
@@ -771,6 +790,8 @@ private fun SealDesktopApp(onExit: () -> Unit) {
             subtitleLanguages = subtitleLanguages,
             embedSubtitles = embedSubtitles,
             subtitleFormat = subtitleFormat,
+            subtitlesOnly = subtitlesOnly,
+            autoTranslatedSubtitles = autoTranslatedSubtitles,
         )
 
     fun exportSettings() {
@@ -795,6 +816,7 @@ private fun SealDesktopApp(onExit: () -> Unit) {
             executable = backup.executable
             downloadDirectory = backup.downloadDirectory
             audioOnly = backup.audioOnly
+            subtitlesOnly = backup.subtitlesOnly
             audioFormat = backup.audioFormat
             audioQuality = backup.audioQuality
             outputTemplate = backup.outputTemplate
@@ -813,11 +835,13 @@ private fun SealDesktopApp(onExit: () -> Unit) {
             subtitleLanguages = backup.subtitleLanguages
             embedSubtitles = backup.embedSubtitles
             subtitleFormat = backup.subtitleFormat
+            autoTranslatedSubtitles = backup.autoTranslatedSubtitles
             preferences.put("language", language)
             preferences.put("theme", theme)
             preferences.put("executable", executable)
             preferences.put("downloadDirectory", downloadDirectory)
             preferences.putBoolean("audioOnly", audioOnly)
+            preferences.putBoolean("subtitlesOnly", subtitlesOnly)
             preferences.put("audioFormat", audioFormat)
             preferences.put("audioQuality", audioQuality)
             preferences.put("outputTemplate", outputTemplate)
@@ -836,6 +860,7 @@ private fun SealDesktopApp(onExit: () -> Unit) {
             preferences.put("subtitleLanguages", subtitleLanguages)
             preferences.putBoolean("embedSubtitles", embedSubtitles)
             preferences.put("subtitleFormat", subtitleFormat)
+            preferences.putBoolean("autoTranslatedSubtitles", autoTranslatedSubtitles)
             status = "Settings imported."
             error = false
         } catch (exception: Exception) {
@@ -942,6 +967,8 @@ private fun SealDesktopApp(onExit: () -> Unit) {
                                 subtitleLanguages = item.subtitleLanguages,
                                 embedSubtitles = item.embedSubtitles,
                                 subtitleFormat = item.subtitleFormat,
+                                subtitlesOnly = item.subtitlesOnly,
+                                autoTranslatedSubtitles = item.autoTranslatedSubtitles,
                             ) { line ->
                                 try {
                                     DiagnosticLog.append("yt-dlp output", "${item.title}: $line")
@@ -1110,7 +1137,10 @@ private fun SealDesktopApp(onExit: () -> Unit) {
         }
         try {
             val parsedCustomArguments = parseCustomYtDlpArguments(customArguments)
-            validateSubtitleCustomArguments(subtitleSource, parsedCustomArguments)
+            // Subtitles-only falls back to both sources when the user left subtitles off.
+            val effectiveSubtitleSource =
+                if (subtitlesOnly && subtitleSource == "off") "both" else subtitleSource
+            validateSubtitleCustomArguments(effectiveSubtitleSource, parsedCustomArguments)
             require(sponsorBlockCategories.isEmpty() || isValidSponsorBlockCategories(sponsorBlockCategories)) {
                 "Select supported SponsorBlock categories."
             }
@@ -1123,23 +1153,24 @@ private fun SealDesktopApp(onExit: () -> Unit) {
             require(!isYouTubePlaylistUrl(videoUrl)) { "Select individual videos from the playlist before queueing." }
             requireHttpUrl(videoUrl)
             subtitleArguments(
-                source = subtitleSource,
+                source = effectiveSubtitleSource,
                 languages = subtitleLanguages,
-                embed = embedSubtitles,
+                embed = embedSubtitles && !subtitlesOnly,
                 format = subtitleFormat,
-                audioOnly = audioOnly,
+                audioOnly = audioOnly && !subtitlesOnly,
+                autoTranslatedSubtitles = autoTranslatedSubtitles,
             )
         } catch (exception: IllegalArgumentException) {
             status = exception.message.orEmpty()
             error = true
             return false
         }
-        val selectedAudioFormat = if (audioOnly) audioFormat else null
+        val selectedAudioFormat = if (audioOnly && !subtitlesOnly) audioFormat else null
         val selectedAudioQuality =
             if (audioQuality == "Best") "0"
             else audioQuality.substringBefore(" kbps") + "K"
         val selectedVideoFormat =
-            if (audioOnly || video == null) null
+            if (audioOnly || subtitlesOnly || video == null) null
             else video.formats.firstOrNull { videoFormatSelector(it) == selectedFormatSelector }
         queue.add(
             DownloadQueueItem(
@@ -1148,25 +1179,28 @@ private fun SealDesktopApp(onExit: () -> Unit) {
                 title = title.ifBlank { videoUrl.trim() },
                 sourcePlatform = sourcePlatform,
                 outputDirectory = outputFolder,
-                maxHeight = if (audioOnly) null else maxHeight,
+                maxHeight = if (audioOnly || subtitlesOnly) null else maxHeight,
                 audioFormat = selectedAudioFormat,
                 audioQuality = selectedAudioQuality,
                 qualityLabel =
-                    if (audioOnly) "$audioFormat · $audioQuality"
+                    if (subtitlesOnly)
+                        "${subtitleSourceLabel(if (subtitleSource == "off") "both" else subtitleSource)} · " +
+                            "${subtitleFormat.uppercase()} · $subtitleLanguages"
+                    else if (audioOnly) "$audioFormat · $audioQuality"
                     else selectedVideoFormat?.let {
                         listOfNotNull(it.format_id, it.height?.let { height -> "${height}p" }, it.ext?.uppercase())
                             .joinToString(" · ")
                     } ?: maxHeight?.let { "$it p" } ?: tr("best"),
                 estimatedSizeBytes =
-                    video?.let {
+                    if (subtitlesOnly) null else video?.let {
                         estimateDownloadSizeBytes(
                                 video = video,
-                                maxHeight = if (audioOnly) null else maxHeight,
+                                maxHeight = if (audioOnly || subtitlesOnly) null else maxHeight,
                                 audioFormat = selectedAudioFormat,
                                 audioQuality = selectedAudioQuality,
                         )
                     },
-                formatSelector = if (audioOnly) null else selectedFormatSelector,
+                formatSelector = if (audioOnly || subtitlesOnly) null else selectedFormatSelector,
                 outputTemplate = outputTemplate,
                 rateLimit = rateLimit.trim().ifBlank { null },
                 proxy = proxy.trim().ifBlank { null },
@@ -1178,13 +1212,22 @@ private fun SealDesktopApp(onExit: () -> Unit) {
                 cookiesFile = cookiesFile.trim().ifBlank { null },
                 sponsorBlockCategories = sponsorBlockCategories,
                 customArguments = customArguments,
-                subtitleSource = subtitleSource,
+                subtitleSource = if (subtitlesOnly && subtitleSource == "off") "both" else subtitleSource,
                 subtitleLanguages = subtitleLanguages.trim().split(',').joinToString(",") { it.trim() },
                 embedSubtitles = embedSubtitles,
                 subtitleFormat = subtitleFormat,
+                subtitlesOnly = subtitlesOnly,
+                autoTranslatedSubtitles = autoTranslatedSubtitles,
             ),
         )
-        status = if (language == "ar") "تمت إضافة الفيديو إلى قائمة التنزيل." else "Video added to the download queue."
+        status =
+            if (subtitlesOnly) {
+                if (language == "ar") "تمت إضافة الترجمات إلى قائمة التنزيل." else "Subtitles added to the download queue."
+            } else if (language == "ar") {
+                "تمت إضافة الفيديو إلى قائمة التنزيل."
+            } else {
+                "Video added to the download queue."
+            }
         error = false
         return true
     }
@@ -1444,16 +1487,45 @@ private fun SealDesktopApp(onExit: () -> Unit) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(tr("type"), modifier = Modifier.width(100.dp))
                                     ChoiceMenu(
-                                        selected = if (audioOnly) tr("audioOnly") else tr("videoAudio"),
-                                        options = listOf(tr("videoAudio"), tr("audioOnly")),
+                                        selected =
+                                            when {
+                                                subtitlesOnly -> tr("subtitlesOnly")
+                                                audioOnly -> tr("audioOnly")
+                                                else -> tr("videoAudio")
+                                            },
+                                        options = listOf(tr("videoAudio"), tr("audioOnly"), tr("subtitlesOnly")),
                                         enabled = true,
                                         onSelected = {
+                                            subtitlesOnly = it == tr("subtitlesOnly")
                                             audioOnly = it == tr("audioOnly")
                                             preferences.putBoolean("audioOnly", audioOnly)
+                                            preferences.putBoolean("subtitlesOnly", subtitlesOnly)
                                         },
                                     )
                                 }
-                                if (audioOnly) {
+                                if (subtitlesOnly) {
+                                    Text(tr("subtitlesOnlyHelp"), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(tr("subtitleSource"), modifier = Modifier.width(100.dp))
+                                        val sourceOptions =
+                                            listOf(
+                                                "manual" to tr("subtitleManual"),
+                                                "auto" to tr("subtitleAuto"),
+                                                "both" to tr("subtitleBoth"),
+                                            )
+                                        ChoiceMenu(
+                                            selected =
+                                                sourceOptions.firstOrNull { it.first == subtitleSource }?.second
+                                                    ?: tr("subtitleBoth"),
+                                            options = sourceOptions.map { it.second },
+                                            enabled = true,
+                                            onSelected = { selected ->
+                                                subtitleSource = sourceOptions.first { it.second == selected }.first
+                                                preferences.put("subtitleSource", subtitleSource)
+                                            },
+                                        )
+                                    }
+                                } else if (audioOnly) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(tr("audio"), modifier = Modifier.width(100.dp))
                                         ChoiceMenu(
@@ -1558,16 +1630,45 @@ private fun SealDesktopApp(onExit: () -> Unit) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(tr("type"), modifier = Modifier.width(100.dp))
                                     ChoiceMenu(
-                                        selected = if (audioOnly) tr("audioOnly") else tr("videoAudio"),
-                                        options = listOf(tr("videoAudio"), tr("audioOnly")),
+                                        selected =
+                                            when {
+                                                subtitlesOnly -> tr("subtitlesOnly")
+                                                audioOnly -> tr("audioOnly")
+                                                else -> tr("videoAudio")
+                                            },
+                                        options = listOf(tr("videoAudio"), tr("audioOnly"), tr("subtitlesOnly")),
                                         enabled = true,
                                         onSelected = {
+                                            subtitlesOnly = it == tr("subtitlesOnly")
                                             audioOnly = it == tr("audioOnly")
                                             preferences.putBoolean("audioOnly", audioOnly)
+                                            preferences.putBoolean("subtitlesOnly", subtitlesOnly)
                                         },
                                     )
                                 }
-                                if (audioOnly) {
+                                if (subtitlesOnly) {
+                                    Text(tr("subtitlesOnlyHelp"), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(tr("subtitleSource"), modifier = Modifier.width(100.dp))
+                                        val sourceOptions =
+                                            listOf(
+                                                "manual" to tr("subtitleManual"),
+                                                "auto" to tr("subtitleAuto"),
+                                                "both" to tr("subtitleBoth"),
+                                            )
+                                        ChoiceMenu(
+                                            selected =
+                                                sourceOptions.firstOrNull { it.first == subtitleSource }?.second
+                                                    ?: tr("subtitleBoth"),
+                                            options = sourceOptions.map { it.second },
+                                            enabled = true,
+                                            onSelected = { selected ->
+                                                subtitleSource = sourceOptions.first { it.second == selected }.first
+                                                preferences.put("subtitleSource", subtitleSource)
+                                            },
+                                        )
+                                    }
+                                } else if (audioOnly) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(tr("audio"), modifier = Modifier.width(100.dp))
                                         ChoiceMenu(
@@ -1887,7 +1988,7 @@ private fun SealDesktopApp(onExit: () -> Unit) {
                                     },
                                 )
                             }
-                            if (subtitleSource != "off") {
+                            if (subtitleSource != "off" || subtitlesOnly) {
                                 Text(tr("subtitleHelp"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 val languageChoices =
                                     listOf(
@@ -1926,6 +2027,25 @@ private fun SealDesktopApp(onExit: () -> Unit) {
                                     supportingText = { Text(tr("subtitleLanguageHelp")) },
                                     singleLine = true,
                                 )
+                                val includesAutomaticCaptions =
+                                    when {
+                                        subtitlesOnly -> subtitleSource != "manual"
+                                        else -> subtitleSource == "auto" || subtitleSource == "both"
+                                    }
+                                if (includesAutomaticCaptions) {
+                                    SettingSwitch(
+                                        label = tr("subtitleAutoTranslated"),
+                                        checked = autoTranslatedSubtitles,
+                                        onCheckedChange = {
+                                            autoTranslatedSubtitles = it
+                                            preferences.putBoolean("autoTranslatedSubtitles", it)
+                                        },
+                                    )
+                                    Text(
+                                        tr("subtitleAutoTranslatedHelp"),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
                                 SettingSwitch(
                                     label = tr("subtitleEmbed"),
                                     checked = embedSubtitles,
@@ -2402,7 +2522,13 @@ private fun QueueItemRow(
         ) {
             Text(item.title, style = MaterialTheme.typography.titleSmall)
             Text(
-                "$statusText · ${if (item.audioFormat == null) strings.getValue("videoAudio") else strings.getValue("audioOnly")}",
+                "$statusText · ${
+                    when {
+                        item.subtitlesOnly -> strings.getValue("subtitlesOnly")
+                        item.audioFormat != null -> strings.getValue("audioOnly")
+                        else -> strings.getValue("videoAudio")
+                    }
+                }",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(

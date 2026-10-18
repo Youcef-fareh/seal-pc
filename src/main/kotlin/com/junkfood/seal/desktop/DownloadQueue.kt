@@ -40,6 +40,8 @@ internal data class DownloadQueueItem(
     val subtitleLanguages: String = "en",
     val embedSubtitles: Boolean = false,
     val subtitleFormat: String = "srt",
+    val subtitlesOnly: Boolean = false,
+    val autoTranslatedSubtitles: Boolean = true,
     val status: QueueStatus = QueueStatus.WAITING,
     val progress: Float = 0f,
     val message: String = "",

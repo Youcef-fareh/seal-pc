@@ -35,6 +35,8 @@ class DownloadHistoryTest {
                         subtitleLanguages = "ar,fr",
                         embedSubtitles = true,
                         subtitleFormat = "vtt",
+                        subtitlesOnly = true,
+                        autoTranslatedSubtitles = false,
                     ),
                 )
 
@@ -86,6 +88,8 @@ class DownloadHistoryTest {
                 subtitleLanguages = "en",
                 embedSubtitles = false,
                 subtitleFormat = "srt",
+                subtitlesOnly = true,
+                autoTranslatedSubtitles = false,
             )
 
         val queueItem = entry.toQueueItem()
@@ -102,6 +106,8 @@ class DownloadHistoryTest {
         assertEquals("en", queueItem.subtitleLanguages)
         assertEquals(false, queueItem.embedSubtitles)
         assertEquals("srt", queueItem.subtitleFormat)
+        assertEquals(true, queueItem.subtitlesOnly)
+        assertEquals(false, queueItem.autoTranslatedSubtitles)
     }
 
     @Test

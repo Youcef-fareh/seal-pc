@@ -44,6 +44,118 @@ class YtDlpClientTest {
     }
 
     @Test
+    fun subtitleOnlyDownloadsBothCaptionSourcesWithoutDownloadingMedia() {
+        assertEquals(
+            listOf(
+                "--skip-download",
+                "--write-subs",
+                "--write-auto-subs",
+                "--sub-langs",
+                "ar,fr",
+                "--convert-subs",
+                "vtt",
+                "--sleep-requests",
+                "1",
+                "--sleep-subtitles",
+                "5",
+            ),
+            subtitleOnlyDownloadArguments(source = "both", languages = "ar, fr", format = "vtt"),
+        )
+    }
+
+    @Test
+    fun subtitleOnlyHonorsTheChosenCaptionSource() {
+        assertEquals(
+            listOf(
+                "--skip-download",
+                "--write-subs",
+                "--sub-langs",
+                "en",
+                "--convert-subs",
+                "srt",
+                "--sleep-requests",
+                "1",
+                "--sleep-subtitles",
+                "5",
+            ),
+            subtitleOnlyDownloadArguments(source = "manual", languages = "en", format = "srt"),
+        )
+        assertEquals(
+            listOf(
+                "--skip-download",
+                "--write-auto-subs",
+                "--sub-langs",
+                "ar",
+                "--convert-subs",
+                "srt",
+                "--sleep-requests",
+                "1",
+                "--sleep-subtitles",
+                "5",
+            ),
+            subtitleOnlyDownloadArguments(source = "auto", languages = "ar", format = "srt"),
+        )
+    }
+
+    @Test
+    fun skipsPlatformTranslationsWhenAutoTranslatedCaptionsAreDisabled() {
+        assertEquals(
+            listOf(
+                "--write-auto-subs",
+                "--extractor-args",
+                "youtube:skip=translated_subs",
+                "--sub-langs",
+                "en",
+                "--convert-subs",
+                "srt",
+            ),
+            subtitleArguments(
+                source = "auto",
+                languages = "en",
+                embed = false,
+                format = "srt",
+                audioOnly = false,
+                autoTranslatedSubtitles = false,
+            ),
+        )
+        assertEquals(
+            listOf(
+                "--skip-download",
+                "--write-subs",
+                "--write-auto-subs",
+                "--extractor-args",
+                "youtube:skip=translated_subs",
+                "--sub-langs",
+                "en",
+                "--convert-subs",
+                "srt",
+                "--sleep-requests",
+                "1",
+                "--sleep-subtitles",
+                "5",
+            ),
+            subtitleOnlyDownloadArguments(
+                source = "both",
+                languages = "en",
+                format = "srt",
+                autoTranslatedSubtitles = false,
+            ),
+        )
+        // Uploaded-only downloads never need the translated-captions skip.
+        assertEquals(
+            listOf("--write-subs", "--sub-langs", "en", "--convert-subs", "srt"),
+            subtitleArguments(
+                source = "manual",
+                languages = "en",
+                embed = false,
+                format = "srt",
+                audioOnly = false,
+                autoTranslatedSubtitles = false,
+            ),
+        )
+    }
+
+    @Test
     fun retriesSubtitleFailuresWithoutSuppressingUnrelatedDownloadErrors() {
         val subtitleError = "ERROR: Unable to download video subtitles for 'ar': HTTP Error 429"
         assertEquals(true, isSubtitleDownloadFailure(subtitleError))

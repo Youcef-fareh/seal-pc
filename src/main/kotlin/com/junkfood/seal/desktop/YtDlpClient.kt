@@ -130,6 +130,8 @@ class YtDlpClient(private val executable: String) {
         subtitleLanguages: String = "en",
         embedSubtitles: Boolean = false,
         subtitleFormat: String = "srt",
+        subtitlesOnly: Boolean = false,
+        autoTranslatedSubtitles: Boolean = true,
         onProgress: (String) -> Unit,
     ) {
         val validatedUrl = url.trim().also(::requireHttpUrl)
@@ -177,36 +179,55 @@ class YtDlpClient(private val executable: String) {
                 require(isValidAria2cExecutable(it)) { "Select an existing aria2c executable." }
                 args += listOf("--downloader", "aria2c", "--downloader-args", "aria2c:-x16 -k1M")
             }
-        if (sponsorBlockCategories.isNotEmpty()) {
+        if (!subtitlesOnly && sponsorBlockCategories.isNotEmpty()) {
             require(isValidSponsorBlockCategories(sponsorBlockCategories)) {
                 "Select supported SponsorBlock categories."
             }
             args += listOf("--sponsorblock-remove", sponsorBlockCategories.joinToString(","))
         }
-        if (writeThumbnail) args += "--write-thumbnail"
-        if (embedThumbnail && audioFormat != null) args += "--embed-thumbnail"
-        if (embedMetadata) args += "--embed-metadata"
-        if (embedChapters) args += "--embed-chapters"
-
-        if (audioFormat != null) {
-            args += listOf("--extract-audio", "--audio-format", audioFormat)
-            if (audioQuality.isNotBlank()) {
-                args += listOf("--audio-quality", audioQuality)
-            }
+        if (subtitlesOnly) {
+            require(audioFormat == null) { "Subtitle-only downloads cannot use an audio format." }
         } else {
-            args += listOf("--format", formatSelector ?: videoFormatSelector(maxHeight))
+            if (writeThumbnail) args += "--write-thumbnail"
+            if (embedThumbnail && audioFormat != null) args += "--embed-thumbnail"
+            if (embedMetadata) args += "--embed-metadata"
+            if (embedChapters) args += "--embed-chapters"
+
+            if (audioFormat != null) {
+                args += listOf("--extract-audio", "--audio-format", audioFormat)
+                if (audioQuality.isNotBlank()) {
+                    args += listOf("--audio-quality", audioQuality)
+                }
+            } else {
+                args += listOf("--format", formatSelector ?: videoFormatSelector(maxHeight))
+            }
         }
 
         val parsedCustomArguments = parseCustomYtDlpArguments(customArguments)
-        validateSubtitleCustomArguments(subtitleSource, parsedCustomArguments)
-        args += subtitleArguments(
-            source = subtitleSource,
-            languages = subtitleLanguages,
-            embed = embedSubtitles,
-            format = subtitleFormat,
-            audioOnly = audioFormat != null,
-        )
-        args += subtitleThrottleArguments(subtitleSource)
+        // Subtitles-only still falls back to both sources when the user left subtitles off.
+        val effectiveSubtitleSource =
+            if (subtitlesOnly && subtitleSource == "off") "both" else subtitleSource
+        validateSubtitleCustomArguments(effectiveSubtitleSource, parsedCustomArguments)
+        if (subtitlesOnly) {
+            args +=
+                subtitleOnlyDownloadArguments(
+                    source = effectiveSubtitleSource,
+                    languages = subtitleLanguages,
+                    format = subtitleFormat,
+                    autoTranslatedSubtitles = autoTranslatedSubtitles,
+                )
+        } else {
+            args +=
+                subtitleArguments(
+                    source = effectiveSubtitleSource,
+                    languages = subtitleLanguages,
+                    embed = embedSubtitles,
+                    format = subtitleFormat,
+                    audioOnly = audioFormat != null,
+                    autoTranslatedSubtitles = autoTranslatedSubtitles,
+                )
+            args += subtitleThrottleArguments(effectiveSubtitleSource)
+        }
         args += parsedCustomArguments
 
         args += validatedUrl
@@ -219,7 +240,9 @@ class YtDlpClient(private val executable: String) {
                 extraPathDirectories = aria2cPath?.let { listOf(File(it).absoluteFile.parent) }.orEmpty(),
             )
         } catch (exception: IllegalStateException) {
-            if (subtitleSource == "off" || !isSubtitleDownloadFailure(exception.message.orEmpty())) {
+            if (effectiveSubtitleSource == "off" || subtitlesOnly ||
+                !isSubtitleDownloadFailure(exception.message.orEmpty())
+            ) {
                 throw exception
             }
             onProgress("WARNING: Subtitle download failed; retrying the video without subtitles.")
@@ -393,6 +416,7 @@ internal fun subtitleArguments(
     embed: Boolean,
     format: String,
     audioOnly: Boolean,
+    autoTranslatedSubtitles: Boolean = true,
 ): List<String> {
     require(source in setOf("off", "manual", "auto", "both")) { "Choose a supported subtitle source." }
     if (source == "off") return emptyList()
@@ -403,12 +427,35 @@ internal fun subtitleArguments(
 
     return buildList {
         if (source == "manual" || source == "both") add("--write-subs")
-        if (source == "auto" || source == "both") add("--write-auto-subs")
+        if (source == "auto" || source == "both") {
+            add("--write-auto-subs")
+            // Keep only the original-language automatic captions when translations are not wanted.
+            if (!autoTranslatedSubtitles) {
+                addAll(listOf("--extractor-args", "youtube:skip=translated_subs"))
+            }
+        }
         addAll(listOf("--sub-langs", languages.split(',').joinToString(",") { it.trim() }))
         if (embed && !audioOnly) add("--embed-subs")
         addAll(listOf("--convert-subs", format))
     }
 }
+
+internal fun subtitleOnlyDownloadArguments(
+    source: String,
+    languages: String,
+    format: String,
+    autoTranslatedSubtitles: Boolean = true,
+): List<String> =
+    listOf("--skip-download") +
+        subtitleArguments(
+            source = source,
+            languages = languages,
+            embed = false,
+            format = format,
+            audioOnly = false,
+            autoTranslatedSubtitles = autoTranslatedSubtitles,
+        ) +
+        subtitleThrottleArguments(source)
 
 internal fun isSubtitleDownloadFailure(message: String): Boolean {
     val normalized = message.lowercase()
