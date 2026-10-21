@@ -58,6 +58,8 @@ class YtDlpClientTest {
                 "1",
                 "--sleep-subtitles",
                 "5",
+                "--retry-sleep",
+                "http:exp=2:60",
             ),
             subtitleOnlyDownloadArguments(source = "both", languages = "ar, fr", format = "vtt"),
         )
@@ -77,6 +79,8 @@ class YtDlpClientTest {
                 "1",
                 "--sleep-subtitles",
                 "5",
+                "--retry-sleep",
+                "http:exp=2:60",
             ),
             subtitleOnlyDownloadArguments(source = "manual", languages = "en", format = "srt"),
         )
@@ -92,6 +96,8 @@ class YtDlpClientTest {
                 "1",
                 "--sleep-subtitles",
                 "5",
+                "--retry-sleep",
+                "http:exp=2:60",
             ),
             subtitleOnlyDownloadArguments(source = "auto", languages = "ar", format = "srt"),
         )
@@ -133,6 +139,8 @@ class YtDlpClientTest {
                 "1",
                 "--sleep-subtitles",
                 "5",
+                "--retry-sleep",
+                "http:exp=2:60",
             ),
             subtitleOnlyDownloadArguments(
                 source = "both",
@@ -162,7 +170,14 @@ class YtDlpClientTest {
         assertEquals(false, isSubtitleDownloadFailure("ERROR: Unable to download video: HTTP Error 429"))
         assertEquals(emptyList(), subtitleThrottleArguments("off"))
         assertEquals(
-            listOf("--sleep-requests", "1", "--sleep-subtitles", "5"),
+            listOf(
+                "--sleep-requests",
+                "1",
+                "--sleep-subtitles",
+                "5",
+                "--retry-sleep",
+                "http:exp=2:60",
+            ),
             subtitleThrottleArguments("auto"),
         )
 
@@ -181,12 +196,24 @@ class YtDlpClientTest {
                     "1",
                     "--sleep-subtitles",
                     "5",
+                    "--retry-sleep",
+                    "http:exp=2:60",
                     "--socket-timeout",
                     "30",
                     "https://youtu.be/abc123",
                 ),
             ),
         )
+    }
+
+    @Test
+    fun parsesUrlsFromDroppedTextAndUriLists() {
+        assertEquals("https://youtu.be/abc123", parseDroppedUrl("# shared link\r\n https://youtu.be/abc123 \r\n"))
+        assertEquals(
+            "https://example.org/video",
+            parseDroppedUrl("file:///C:/video.mp4\nhttps://example.org/video"),
+        )
+        assertEquals(null, parseDroppedUrl("# no URL here\nnot a URL"))
     }
 
     @Test

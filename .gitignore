@@ -4,6 +4,7 @@ out/
 .idea/
 *.iml
 *.log
+/seal pc error.txt
 .DS_Store
 Thumbs.db
 desktop.ini

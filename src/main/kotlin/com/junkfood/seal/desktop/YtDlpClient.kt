@@ -466,7 +466,7 @@ internal fun isSubtitleDownloadFailure(message: String): Boolean {
 internal fun withoutSubtitleArguments(arguments: List<String>): List<String> {
     val flags = setOf("--write-subs", "--write-auto-subs", "--embed-subs")
     val optionsWithValues =
-        setOf("--sub-langs", "--convert-subs", "--sleep-requests", "--sleep-subtitles")
+        setOf("--sub-langs", "--convert-subs", "--sleep-requests", "--sleep-subtitles", "--retry-sleep")
     val result = mutableListOf<String>()
     var index = 0
     while (index < arguments.size) {
@@ -483,7 +483,14 @@ internal fun subtitleThrottleArguments(source: String): List<String> =
     if (source == "off") {
         emptyList()
     } else {
-        listOf("--sleep-requests", "1", "--sleep-subtitles", "5")
+        listOf(
+            "--sleep-requests",
+            "1",
+            "--sleep-subtitles",
+            "5",
+            "--retry-sleep",
+            "http:exp=2:60",
+        )
     }
 
 internal fun isNetscapeCookieFile(file: File): Boolean =
@@ -703,6 +710,13 @@ internal fun isValidHttpUrl(url: String): Boolean {
     val uri = runCatching { URI(url.trim()) }.getOrNull() ?: return false
     return uri.scheme?.lowercase() in setOf("http", "https") && !uri.host.isNullOrBlank()
 }
+
+internal fun parseDroppedUrl(text: String?): String? =
+    text?.lineSequence()
+        ?.map(String::trim)
+        ?.firstOrNull { line ->
+            line.isNotEmpty() && !line.startsWith("#") && isValidHttpUrl(line)
+        }
 
 internal fun requireHttpUrl(url: String) {
     require(isValidHttpUrl(url)) {

@@ -630,32 +630,26 @@ private fun SealDesktopApp(onExit: () -> Unit) {
                     java.awt.dnd.DnDConstants.ACTION_COPY,
                     object : DropTargetAdapter() {
                         override fun drop(event: DropTargetDropEvent) {
+                            val flavors = event.currentDataFlavors
                             val flavor =
-                                event.currentDataFlavors.firstOrNull { it.isMimeTypeEqual("text/uri-list") }
-                                    ?: DataFlavor.stringFlavor.takeIf(event::isDataFlavorSupported)
+                                flavors.firstOrNull { it.isMimeTypeEqual("text/uri-list") }
+                                    ?: flavors.firstOrNull { it == DataFlavor.stringFlavor }
+                                    ?: flavors.firstOrNull { it.isMimeTypeEqual("text/plain") }
+                                    ?: flavors.firstOrNull {
+                                        it.isFlavorTextType && !it.isMimeTypeEqual("text/html")
+                                    }
                             if (flavor == null) {
                                 event.rejectDrop()
                                 return
                             }
                             event.acceptDrop(java.awt.dnd.DnDConstants.ACTION_COPY)
                             try {
-                                val droppedText = event.transferable.getTransferData(flavor) as? String
-                                val droppedUrl =
-                                    droppedText?.lineSequence()
-                                        ?.map(String::trim)
-                                        ?.firstOrNull { it.isNotBlank() && !it.startsWith("#") }
-                                val valid =
-                                    try {
-                                    if (droppedUrl.isNullOrBlank()) false else {
-                                        requireHttpUrl(droppedUrl)
-                                        true
-                                    }
-                                    } catch (_: IllegalArgumentException) {
-                                        false
-                                    }
-                                if (valid) {
+                                val droppedText =
+                                    flavor.getReaderForText(event.transferable).buffered().use { it.readText() }
+                                val droppedUrl = parseDroppedUrl(droppedText)
+                                if (droppedUrl != null) {
                                     SwingUtilities.invokeLater {
-                                        url = droppedUrl.orEmpty()
+                                        url = droppedUrl
                                         details = null
                                         playlist = null
                                         selectedPlaylistEntries.clear()
