@@ -16,10 +16,10 @@ group = "com.junkfood.seal.desktop"
 val desktopVersion = providers.gradleProperty("appVersion").orElse("1.0.0").get().removePrefix("v")
 version = desktopVersion
 val ffmpegResourcesDir = layout.buildDirectory.dir("ffmpeg-resources")
-val ffmpegArchive = layout.buildDirectory.file("ffmpeg/ffmpeg-N-127203-ga35c879992-win64-lgpl-shared.zip")
+val ffmpegArchive = layout.buildDirectory.file("ffmpeg/ffmpeg-N-127900-ge2798d5cad-win64-lgpl-shared.zip")
 val ffmpegUrl =
-    "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-05-13-07/ffmpeg-N-127203-ga35c879992-win64-lgpl-shared.zip"
-val ffmpegSha256 = "17c80fdc5c8f59f24c2275b3f33ef9cded8fd789120dbd36d0ca91b30403ed4f"
+    "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-21-13-06/ffmpeg-N-127900-ge2798d5cad-win64-lgpl-shared.zip"
+val ffmpegSha256 = "40a1d8bcd6f61f2843840b84aa5afb2cdc35f0c093f3097b04e2e9f2fb2f0ca4"
 val ytDlpUrl = "https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/yt-dlp.exe"
 val ytDlpSha256 = "66674953fe251b89f4d08c5f0e35e0728679bd67ab3d7d05c0562af101dd3e7a"
 val denoArchive = layout.buildDirectory.file("deno/deno-x86_64-pc-windows-msvc.zip")
